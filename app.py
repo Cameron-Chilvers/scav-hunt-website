@@ -45,5 +45,8 @@ def create_app():
 
     return app
 
+# Expose the app object for Gunicorn
+app = create_app()
+
 if __name__ == '__main__':
-    create_app().run()
+   app.run()
