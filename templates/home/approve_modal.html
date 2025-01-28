@@ -21,11 +21,19 @@
             <div class="modal-footer">
                 <div class="d-flex w-100">
                     <!-- Approve Button -->
-                    <button type="button" class="btn btn-success me-auto" onclick="approveTask('{{ task.Activities }}', '{{ task.Name }}')">
+                    <button id="btnApprove{{loop.index}}" type="button" class="btn btn-success me-auto" onclick="approveTask('{{loop.index}}','{{ task.Activities }}', '{{ task.Name }}')">
                         Approve
                     </button>
+                    <!-- Spinner -->
+                    <div class="spinner-border text-success ms-2 me-auto d-none" role="status" id="approveSpinner{{ loop.index }}">
+                        <span class="visually-hidden">Uploading...</span>
+                    </div>
+                    <!-- Spinner -->
+                    <div class="spinner-border text-danger me-auto d-none" role="status" id="denySpinner{{ loop.index }}">
+                        <span class="visually-hidden">Uploading...</span>
+                    </div>
                     <!-- Deny Button -->
-                    <button type="button" class="btn btn-danger" onclick="denyTask('{{ task.Activities }}', '{{ task.Name }}', document.getElementById('denialMessage{{ loop.index }}').value)">
+                    <button id="btnDeny{{loop.index}}" type="button" class="btn btn-danger" onclick="denyTask('{{loop.index}}','{{ task.Activities }}', '{{ task.Name }}', document.getElementById('denialMessage{{ loop.index }}').value)">
                         Deny
                     </button>
                 </div>

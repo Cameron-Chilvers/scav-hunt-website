@@ -137,13 +137,20 @@
             });
         });
 
-        function approveTask(activity, name) {
-            
-            console.log("Approve task")
-            console.log(activity, name)
+        function approveTask(index, activity, name) {
             
             const clean_task = activity.replaceAll(" ", '-');
             const clean_name = name.replaceAll(" ", '-');
+
+            // Making it more user friendly
+            const approveButton = document.getElementById(`btnApprove${index}`);
+            const denyButton = document.getElementById(`btnDeny${index}`);
+            const approveSpinner = document.getElementById(`approveSpinner${index}`);
+
+            // Make spinner appear and disable buttons
+            approveSpinner.classList.remove('d-none');
+            approveButton.disabled = true;
+            denyButton.disabled = true;
 
             // Send a request to the Flask backend to approve the task
             fetch(`/approve_task/${clean_task}/${clean_name}`, {
@@ -164,14 +171,21 @@
             });
         };
 
-        function denyTask(activity, name, denyMessage) {
-            
-            console.log("Approve task")
-            console.log(activity, name)
+        function denyTask(index, activity, name, denyMessage) {
             
             const clean_task = activity.replaceAll(" ", '-');
             const clean_name = name.replaceAll(" ", '-');
             const clean_deny_message = denyMessage.replaceAll(' ', '-');
+            
+            // Making it more user friendly
+            const approveButton = document.getElementById(`btnApprove${index}`);
+            const denyButton = document.getElementById(`btnDeny${index}`);
+            const denySpinner = document.getElementById(`denySpinner${index}`);
+
+            // Make spinner appear and disable buttons
+            denySpinner.classList.remove('d-none');
+            approveButton.disabled = true;
+            denyButton.disabled = true;
 
             // Send a request to the Flask backend to approve the task
             fetch(`/deny_task/${clean_task}/${clean_name}/${clean_deny_message}`, {
