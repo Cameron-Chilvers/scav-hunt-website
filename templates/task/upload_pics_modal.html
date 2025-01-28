@@ -1,0 +1,78 @@
+{% for task, status, task_media in tasks %}
+    {% if status == '' %}
+        <div class="modal fade" id="uploadModal{{ loop.index }}" tabindex="-1" aria-labelledby="uploadModalLabel{{ loop.index }}" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="uploadModalLabel{{ loop.index }}">Upload Pictures/Videos for {{ task }}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <!-- Upload Form -->
+                        <form id="uploadForm{{ loop.index }}" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label for="fileInput{{ loop.index }}" class="form-label">Select files (pictures/videos):</label>
+                                <input class="form-control" type="file" id="fileInput{{ loop.index }}" name="files" multiple accept="image/*, video/*">
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <!-- Upload Button -->
+                        <button type="button" class="btn btn-success d-flex align-items-center" id="uploadButton{{ loop.index }}" onclick="uploadFiles('{{ task }}', '{{ loop.index }}')">
+                            <i class="bi bi-upload me-2"></i> 
+                            <span>Upload</span>
+                        </button>
+                        <!-- Spinner -->
+                        <div class="spinner-border text-success ms-3 d-none" role="status" id="uploadSpinner{{ loop.index }}">
+                            <span class="visually-hidden">Uploading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+{% endfor %}
+
+<!-- JavaScript to handle file uploads -->
+<script>
+    function uploadFiles(task, index) {
+        const uploadButton = document.getElementById(`uploadButton${index}`);
+        const spinner = document.getElementById(`uploadSpinner${index}`);
+        const form = document.getElementById(`uploadForm${index}`);
+        const fileInput = document.getElementById(`fileInput${index}`);
+        const formData = new FormData(form);
+
+        // Check if the file input is empty
+        if (fileInput.files.length === 0) {
+                alert('Please select at least one file to upload.');
+                return;
+            }
+        // Add task and user ID to the form data
+        formData.append('task', task);
+        formData.append('name', '{{ session.get("user_id") }}');
+
+        // Show spinner and disable upload button
+        spinner.classList.remove('d-none');
+        uploadButton.disabled = true;
+
+        // Send the files to the Flask endpoint
+        fetch('/upload_files', {
+            method: 'POST',
+            body: formData,
+        })
+        .then(response => response.json())
+        .then(data => {
+            alert(data.message); // Show a success message
+            location.reload(); // Reload the page to reflect changes
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Failed to upload files.');
+        })
+        .finally(() => {
+            // Hide spinner and re-enable upload button
+            spinner.classList.add('d-none');
+            uploadButton.disabled = false;
+        });
+    }
+</script>

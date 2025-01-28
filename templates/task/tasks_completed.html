@@ -1,0 +1,261 @@
+{% extends 'header.html' %}
+
+{% block header %}
+  <!-- <h1>{% block title %}View Tasks{% endblock %}</h1> -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+{% endblock %}
+
+{% block content %}
+    <div class="container mt-3">
+        <div class="row text-center">
+            <div class="col-sm-12">
+                <h3 class="text-capitalize">{{ user }}'s Tasks</h3>
+            </div>
+        </div>
+        <br/>
+        <!-- Make this the section to render all of the tasks -->
+        <div class="row">
+            <!-- Column One -->
+            <div class="col-md-6">
+                {% for category, tasks, count, total_tasks in col_one %}
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h3>{{ category }}</h3>
+                        <span class="badge badge-pill {% if count == total_tasks %}bg-success{% else %}bg-warning{% endif %}"
+                        style="font-size: 0.8em;">
+                            {{ count }}/{{ total_tasks }} Completed
+                        </span>
+                    </div>                
+                    <table class="table table-bordered table-striped">
+                        <thead>
+                            <tr>
+                                <th>Task</th>
+                                <th class="text-center">Status</th>
+                                <th><button class="btn btn-outline-primary btn-sm" onclick="hideRows(this)" id="hideBtn_one{{loop.index}}"><i class="bi bi-arrow-up"></i></button></th>
+                            </tr>
+                        </thead>
+                        <tbody id="table_body_one{{loop.index}}">
+                            {% for task, status, task_media in tasks %}
+                            <tr>
+                                <td>{{ task }}</td>
+                                <td class="text-center">
+                                    {% if status == '' %}
+                                        <i class="bi bi-circle text-secondary fs-5" title="Incomplete"></i>
+                                    {% elif status == "0" %}
+                                        <i class="bi bi-hourglass-split text-warning fs-5" title="Pending"></i>
+                                    {% else %}
+                                        <i class="bi bi-check-circle-fill text-success fs-5" title="Done"></i>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if status == '' %}
+                                        <!-- Upload Button -->
+                                        <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#uploadModal{{ loop.index }}">
+                                            <i class="bi bi-upload"></i>
+                                        </button>
+                                    {% elif status == "0" %}
+                                        <!-- View Button -->
+                                        <button type="button" class="btn btn-outline-warning btn-sm"
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#viewModal{{ loop.index }}"
+                                            data-media_info="{{ task_media.media_info }}">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    {% else %}
+                                        <!-- View Button -->
+                                        <button type="button" class="btn btn-outline-success btn-sm"
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#viewModal{{ loop.index }}"
+                                            data-media_info="{{ task_media.media_info }}">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    {% endif %}
+                                    
+                                    <!-- adding the modal -->
+                                    {% include 'task/view_pics_modal.html' %}
+
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% endfor %}
+            </div>
+
+            <!-- Column Two -->
+            <div class="col-md-6">
+                {% for category, tasks, count, total_tasks in col_two %}
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h3>{{ category }}</h3>
+                        <span class="badge badge-pill {% if count == total_tasks %}bg-success{% else %}bg-warning{% endif %}"
+                        style="font-size: 0.8em;">
+                            {{ count }}/{{ total_tasks }} Completed
+                        </span>
+                    </div>                     
+                    <table class="table table-bordered table-striped">
+                        <thead>
+                            <tr>
+                                <th>Task</th>
+                                <th class="text-center">Status</th>
+                                <th><button class="btn btn-outline-primary btn-sm" onclick="hideRows(this)" id="hideBtn_two{{loop.index}}"><i class="bi bi-arrow-up"></i></button></th>
+                            </tr>
+                        </thead>
+                        <tbody id="table_body_two{{loop.index}}">
+                            {% for task, status, task_media in tasks %}
+                            <tr>
+                                <td>{{ task }}</td>
+                                <td class="text-center">
+                                    {% if status == '' %}
+                                        <i class="bi bi-circle text-secondary fs-5" title="Incomplete"></i>
+                                    {% elif status == "0" %}
+                                        <i class="bi bi-hourglass-split text-warning fs-5" title="Pending"></i>
+                                    {% else %}
+                                        <i class="bi bi-check-circle-fill text-success fs-5" title="Done"></i>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if status == '' %}
+
+                                    {% elif status == "0" %}
+                                        <!-- View Button -->
+                                        <button type="button" class="btn btn-outline-warning btn-sm"
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#viewModal{{ loop.index }}"
+                                            data-media_info="{{ task_media.media_info }}">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    {% else %}
+                                        <!-- View Button -->
+                                        <button type="button" class="btn btn-outline-success btn-sm"
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#viewModal{{ loop.index }}"
+                                            data-media_info="{{ task_media.media_info }}">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    {% endif %}
+                                    
+                                    <!-- adding the modal -->
+                                    {% include 'task/view_pics_modal.html' %}
+
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+            
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const modals = document.querySelectorAll('.view-modal');
+            modals.forEach(modal => {
+                modal.addEventListener('show.bs.modal', function () {
+                    // Get the modal button that triggered the modal
+                    const modalButton = document.querySelector(`[data-bs-target="#${modal.id}"]`);
+
+                    // Retrieve the media_info JSON string from the button's data-media_info attribute
+                    const mediaInfo = modalButton.getAttribute('data-media_info');
+
+                    // Parse the JSON string into a JavaScript object (array of media items)
+                    const mediaCollection = JSON.parse(mediaInfo);
+
+                    // Get the modal content container
+                    const mediaContentContainer = document.getElementById(`media-content-${modal.id.replace('viewModal', '')}`);
+
+                    // Check if the media is already loaded to avoid redundant requests
+                    if (!mediaContentContainer.hasAttribute('data-loaded')) {
+                        // Show a spinner or placeholder while content is loading
+                        mediaContentContainer.innerHTML = `<div class="text-center"><p>Loading media...</p></div>`;
+
+                        // Dynamically generate the media content with placeholders
+                        let mediaHtml = '';
+                        mediaCollection.forEach((mediaItem, index) => {
+                            const mediaId = mediaItem[0];  // Media path
+                            const mediaType = mediaItem[1];  // Media type (image/video)
+                            const mediaName = mediaItem[2]; // File name
+                            const userName = mediaItem[3]; // User name
+
+                            if (mediaType.includes('image')) {
+                                mediaHtml += `
+                                    <div class="carousel-item ${index === 0 ? 'active' : ''}">
+                                        <div class="media-container position-relative">
+                                            <!-- Placeholder -->
+                                            <div class="placeholder d-flex justify-content-center align-items-center" style="height: 30px; background-color: #f0f0f0; color: #888;">
+                                                <span>Loading image...</span>
+                                            </div>
+                                            <!-- Actual image -->
+                                            <img src="/media/${userName}/${mediaName}" class="d-block w-100 img-fluid media-item position-absolute top-50 start-50 translate-middle" 
+                                                style="display: none;" alt="Image"
+                                                onload="this.previousElementSibling.style.display = 'none'; this.style.display = 'block';">
+                                        </div>
+                                    </div>
+                                `;
+                            } else if (mediaType.includes('video')) {
+                                mediaHtml += `
+                                    <div class="carousel-item ${index === 0 ? 'active' : ''}">
+                                        <div class="media-container position-relative">
+                                            <!-- Placeholder -->
+                                            <div class="placeholder d-flex justify-content-center align-items-center" style="height: 30px; background-color: #f0f0f0; color: #888;">
+                                                <span>Loading video...</span>
+                                            </div>
+                                            <!-- Actual video -->
+                                            <video controls class="d-block w-100 media-item position-absolute top-50 start-50 translate-middle" 
+                                                style="display: none;" 
+                                                oncanplay="this.previousElementSibling.style.display = 'none'; this.style.display = 'block';">
+                                                <source src="/media/${userName}/${mediaName}" type="video/mp4">
+                                                Your browser does not support the video tag.
+                                            </video>
+                                        </div>
+                                    </div>
+                                `;
+                            }
+                        });
+
+                        // Insert the generated HTML into the modal
+                        mediaContentContainer.innerHTML = `
+                            <div id="carousel${modal.id.replace('pictureModal', '')}" class="carousel slide" data-bs-interval="false">
+                                <div class="carousel-inner">
+                                    ${mediaHtml}
+                                </div>
+                                <button class="carousel-control-prev" type="button" data-bs-target="#carousel${modal.id.replace('pictureModal', '')}" data-bs-slide="prev">
+                                    <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                                    <span class="visually-hidden">Previous</span>
+                                </button>
+                                <button class="carousel-control-next" type="button" data-bs-target="#carousel${modal.id.replace('pictureModal', '')}" data-bs-slide="next">
+                                    <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                                    <span class="visually-hidden">Next</span>
+                                </button>
+                            </div>
+                        `;
+
+                        // Mark as loaded to prevent redundant loading
+                        mediaContentContainer.setAttribute('data-loaded', 'true');
+                    };
+                });
+            });
+        });
+        
+        function hideRows(object){
+            const id = object.id;
+            const index = id.replace("hideBtn_", '');
+            const table_body_id = "table_body_".concat(index);
+
+            if (!object.hasAttribute('data-hidden')) {
+                object.setAttribute('data-hidden', 'true');
+                
+                // Hide here
+                document.getElementById(table_body_id).style.visibility = 'collapse';
+                object.innerHTML = '<i class="bi bi-arrow-down"></i>';
+            } else{
+                object.removeAttribute('data-hidden');
+                
+                // Show here
+                document.getElementById(table_body_id).style.visibility = 'visible';
+                object.innerHTML = '<i class="bi bi-arrow-up"></i>';
+            }
+        }   
+    </script>
+
+{% endblock %}

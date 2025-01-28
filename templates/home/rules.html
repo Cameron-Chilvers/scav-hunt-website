@@ -1,0 +1,83 @@
+{% extends 'header.html' %}
+
+{% block header %}
+  <!-- <h1>{% block title %}View Tasks{% endblock %}</h1> -->
+{% endblock %}
+
+{% block content %}
+<div class="container mt-3">
+    <div class="row text-center">
+        <div class="col-sm-12">
+            <h3 class="text-capitalize">The Rules</h3>
+        </div>
+    </div>
+    <div class="row text-center">
+        <div class="col-sm-12">
+            <p>
+                <u>Timeframe</u><br>
+                The scavenger hunt will run from the 3rd of February 7am AEST to the 17th of February 8pm AEST. All tasks must be completed in Japan during this period. 
+                <br>
+                <br>
+
+                <u>Task Completion</u><br>
+                Each task can only be completed once. Duplicate submissions for the same task will not be accepted.
+                <br>
+                <br>
+
+                <u>Evidence Submission</u><br>
+                To validate a completed task, participants must submit photo or video evidence. If you have any disputes text one of the approvers.
+                <br>
+                <br>
+
+                <u>Team Participation</u><br>
+                You may participate as an individual or in a team of two. If you are participating as a team, please register under a single name to share your entries. The prize money will be split amongst those in the team. 
+                <br>
+                <br>
+
+                <u></u>Account Registration</u><br>
+                When signing up for the scavenger hunt, do not use your regular password for security reasons. 
+                <br>
+                <br>
+
+                <u></u>Participation Fee</u><br>
+                To participate, send $5 to Cam to contribute to the prize pool.
+                <br>
+                <br>
+
+                <u></u>Task Approval</u><br>
+                Tasks will be manually reviewed and approved based on the discretion of designated approvers. 
+                <br>
+                <br>
+
+                <u></u>Purpose</u><br>
+                This scavenger hunt is designed to create lasting memories and collect meaningful photos or videos from your Japan trip.
+                <br>
+                <br>
+
+                <u></u>Respect and Safety</u><br>
+                Always be respectful of local customs, laws, and people while completing tasks.
+                Ensure your safety and the safety of others during the hunt.
+                <br>
+                <br>
+
+                <u></u>Prize</u><br>
+                There will be 1st, 2nd and 3rd place monetary prizes. Winners will be announced on the 17th of February at 9pm AEST. 
+                <br><br>
+
+                <u></u>Have Fun!</u><br>
+                Above all, enjoy the experience, get out of your comfort zone, explore Japan, and make unforgettable memories!
+                <br>
+            </p>
+        </div>
+    </div>
+    {% if read_rules == '0' %}
+        <div class="row text-center mb-3">
+            <div class="col-sm-12">
+                <form method="POST">
+                    <button class="btn btn-primary" name="read_rules" value="1">I Understand</button>
+                </form>
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

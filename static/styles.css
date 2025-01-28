@@ -1,0 +1,43 @@
+ /* Ensure all media (images and videos) are the same size */
+.media-container {
+    position: relative;
+    width: 100%;
+    height: 350px; /* Adjust height as needed */
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.media-item {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+}
+
+/* Position carousel buttons next to the media */
+.carousel-control-custom {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: auto;
+    background-color: rgba(0, 0, 0, 0.1); /* Semi-transparent background */
+    border: none;
+    padding: 5px;
+}
+
+.carousel-control-prev.carousel-control-custom {
+    left: 10px; /* Position the previous button on the left */
+}
+
+.carousel-control-next.carousel-control-custom {
+    right: 10px; /* Position the next button on the right */
+}
+
+/* Style the carousel control icons */
+.carousel-control-prev-icon,
+.carousel-control-next-icon {
+    filter: invert(1); /* Make the icons white */
+}

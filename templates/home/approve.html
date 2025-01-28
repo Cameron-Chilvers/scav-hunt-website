@@ -1,0 +1,195 @@
+{% extends 'header.html' %}
+
+{% block header %}
+  <!-- <h1>{% block title %}View Tasks{% endblock %}</h1> -->
+{% endblock %}
+
+{% block content %}
+    <div class="container mt-3">
+        <div class="row">
+            <div class="col"> 
+                <h3>Approve Tasks</h3>
+            </div>
+        </div>
+         <!-- table with time, acitiyy, person name, and button to model for the pictures -->
+        <div class="row">
+            <div class="col"> 
+                <table class="table table-bordered table-striped">
+                    <thead>
+                        <tr>
+                            <th>Task</th>
+                            <th>Name</th>
+                            <th>Proof</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for task in unapproved_tasks %}
+                            <tr>
+                                <td>{{ task.Activities }}</td>
+                                <td>{{ task.Name }}</td>
+                                <td>
+                                    <!-- Button to view picture -->
+                                    <button type="button" class="btn btn-primary btn-sm" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#pictureModal{{ loop.index }}"
+                                            data-media_info="{{ task.media_info }}">
+                                        <i class="bi bi-image"></i>
+                                    </button>
+                    
+                                    {% include 'home/approve_modal.html' %}
+
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const modals = document.querySelectorAll('.modal');
+            modals.forEach(modal => {
+                modal.addEventListener('show.bs.modal', function () {
+                    // Get the modal button that triggered the modal
+                    const modalButton = document.querySelector(`[data-bs-target="#${modal.id}"]`);
+
+                    // Retrieve the media_info JSON string from the button's data-media_info attribute
+                    const mediaInfo = modalButton.getAttribute('data-media_info');
+
+                    // Parse the JSON string into a JavaScript object (array of media items)
+                    const mediaCollection = JSON.parse(mediaInfo);
+
+                    // Get the modal content container
+                    const mediaContentContainer = document.getElementById(`media-content-${modal.id.replace('pictureModal', '')}`);
+
+                    // Check if the media is already loaded to avoid redundant requests
+                    if (!mediaContentContainer.hasAttribute('data-loaded')) {
+                        // Show a spinner or placeholder while content is loading
+                        mediaContentContainer.innerHTML = `<div class="text-center"><p>Loading media...</p></div>`;
+
+                        // Dynamically generate the media content with placeholders
+                        let mediaHtml = '';
+                        mediaCollection.forEach((mediaItem, index) => {
+                            const mediaId = mediaItem[0];  // Media path
+                            const mediaType = mediaItem[1];  // Media type (image/video)
+                            const mediaName = mediaItem[2]; // File name
+                            const userName = mediaItem[3]; // User name
+
+                            if (mediaType.includes('image')) {
+                                mediaHtml += `
+                                    <div class="carousel-item ${index === 0 ? 'active' : ''}">
+                                        <div class="media-container position-relative">
+                                            <!-- Placeholder -->
+                                            <div class="placeholder d-flex justify-content-center align-items-center" style="height: 30px; background-color: #f0f0f0; color: #888;">
+                                                <span>Loading image...</span>
+                                            </div>
+                                            <!-- Actual image -->
+                                            <img src="/media/${userName}/${mediaName}" class="d-block w-100 img-fluid media-item position-absolute top-50 start-50 translate-middle" 
+                                                style="display: none;" alt="Image"
+                                                onload="this.previousElementSibling.style.display = 'none'; this.style.display = 'block';">
+                                        </div>
+                                    </div>
+                                `;
+                            } else if (mediaType.includes('video')) {
+                                mediaHtml += `
+                                    <div class="carousel-item ${index === 0 ? 'active' : ''}">
+                                        <div class="media-container position-relative">
+                                            <!-- Placeholder -->
+                                            <div class="placeholder d-flex justify-content-center align-items-center" style="height: 30px; background-color: #f0f0f0; color: #888;">
+                                                <span>Loading video...</span>
+                                            </div>
+                                            <!-- Actual video -->
+                                            <video controls class="d-block w-100 media-item position-absolute top-50 start-50 translate-middle" 
+                                                style="display: none;" 
+                                                oncanplay="this.previousElementSibling.style.display = 'none'; this.style.display = 'block';">
+                                                <source src="/media/${userName}/${mediaName}" type="video/mp4">
+                                                Your browser does not support the video tag.
+                                            </video>
+                                        </div>
+                                    </div>
+                                `;
+                            }
+                        });
+
+                        // Insert the generated HTML into the modal
+                        mediaContentContainer.innerHTML = `
+                            <div id="carousel${modal.id.replace('pictureModal', '')}" class="carousel slide" data-bs-interval="false">
+                                <div class="carousel-inner">
+                                    ${mediaHtml}
+                                </div>
+                                <button class="carousel-control-prev" type="button" data-bs-target="#carousel${modal.id.replace('pictureModal', '')}" data-bs-slide="prev">
+                                    <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                                    <span class="visually-hidden">Previous</span>
+                                </button>
+                                <button class="carousel-control-next" type="button" data-bs-target="#carousel${modal.id.replace('pictureModal', '')}" data-bs-slide="next">
+                                    <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                                    <span class="visually-hidden">Next</span>
+                                </button>
+                            </div>
+                        `;
+
+                        // Mark as loaded to prevent redundant loading
+                        mediaContentContainer.setAttribute('data-loaded', 'true');
+                    };
+                });
+            });
+        });
+
+        function approveTask(activity, name) {
+            
+            console.log("Approve task")
+            console.log(activity, name)
+            
+            const clean_task = activity.replaceAll(" ", '-');
+            const clean_name = name.replaceAll(" ", '-');
+
+            // Send a request to the Flask backend to approve the task
+            fetch(`/approve_task/${clean_task}/${clean_name}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'include',
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log(data)
+                location.reload(); // Reload the page to reflect changes
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to approve task.');
+            });
+        };
+
+        function denyTask(activity, name, denyMessage) {
+            
+            console.log("Approve task")
+            console.log(activity, name)
+            
+            const clean_task = activity.replaceAll(" ", '-');
+            const clean_name = name.replaceAll(" ", '-');
+            const clean_deny_message = denyMessage.replaceAll(' ', '-');
+
+            // Send a request to the Flask backend to approve the task
+            fetch(`/deny_task/${clean_task}/${clean_name}/${clean_deny_message}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'include',
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log(data)
+                location.reload(); // Reload the page to reflect changes
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to deny task.');
+            });
+        }
+    </script>
+{% endblock %}
