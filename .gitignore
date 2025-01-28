@@ -160,4 +160,4 @@ cython_debug/
 #.idea/
 
 # Remove credtials
-.credentials.json
+credentials.json
