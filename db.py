@@ -41,7 +41,7 @@ def delete_files(user_folder):
 class GoogleConnector:
     def __init__(self, scopes = ["https://www.googleapis.com/auth/spreadsheets", 
                                  'https://www.googleapis.com/auth/drive'], 
-                 credential_path = r"flaskr\\credentials.json", 
+                 credential_path = r"credentials.json", 
                  sheet_id = "1Ue-ugS6uAHgjY6rOvcbGNK92AKasbJiLINxpWmoKtvE", 
                  folder_id='1wClLnyxbprifajhcqJenXD1zdAC79IMk'):
 

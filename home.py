@@ -2,9 +2,9 @@ from flask import (
     Blueprint, flash, redirect, render_template, request, session, url_for
 )
 from werkzeug.exceptions import abort
-from .db import GoogleConnector
+from db import GoogleConnector
 
-from flaskr.auth import login_required, read_rules_required
+from auth import login_required, read_rules_required
 import pandas as pd
 
 home_bp = Blueprint('home', __name__)
@@ -59,7 +59,7 @@ def index():
     # Get the recently done tasks
     history = db.get_history()
     history['time'] = pd.to_datetime(history['time'])
-    recent_five_tasks_done = history.tail(5).values.tolist()
+    recent_five_tasks_done = history.sort_values(['time'], ascending=[False]).head(5).values.tolist()
 
     # Get the updates information
     updates_data: pd.DataFrame = db.get_task_status()
@@ -67,7 +67,7 @@ def index():
     # Getting the recenct 5 updates
     filtered_udpates_df: pd.DataFrame = updates_data[(updates_data['user'] == username) & (updates_data['status'] != '')]
     filtered_udpates_df.loc[:, 'time'] = pd.to_datetime(filtered_udpates_df['time'])
-    filtered_udpates_list = filtered_udpates_df.tail(5).values.tolist()
+    filtered_udpates_list = filtered_udpates_df.sort_values(['time'], ascending=[False]).head(5).values.tolist()
     
     return render_template('home/index.html', points = points, rank = rank, top_five = top_five, player_above = player_above,
                            col_one= col_one_sorted, col_two = col_two_sorted, recent_tasks = recent_five_tasks_done, updates_list = filtered_udpates_list)

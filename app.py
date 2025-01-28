@@ -2,11 +2,11 @@ from flask import Flask
 from datetime import timedelta
 import os
 
-from .db import GoogleConnector
-from .auth import auth_bp
-from .home import home_bp
-from .tasks import tsk_bp
-from .approve import approve_bp
+from db import GoogleConnector
+from auth import auth_bp
+from home import home_bp
+from tasks import tsk_bp
+from approve import approve_bp
 
 UPLOAD_FOLDER = os.path.join('uploads')
 

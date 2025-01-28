@@ -13,7 +13,7 @@ from datetime import datetime
 from pytz import timezone
 import time
 
-from .db import GoogleConnector
+from db import GoogleConnector
 
 tsk_bp = Blueprint('tasks', __name__)
 
@@ -92,7 +92,8 @@ def tasks():
 
     # Check if the current time is within the range
     allow_tasks = (time_start <= timenow and timenow <= time_end)
-
+    allow_tasks = True
+    
     return render_template('task/tasks.html', rank = rank, points = points, col_one = col_one_sorted, col_two = col_two_sorted, allow_tasks = allow_tasks)
 
 def compress_and_save_files(file, task_safe, user_folder, output_folder, quality=50, video_bitrate="400k"):

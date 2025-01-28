@@ -1,10 +1,10 @@
 from flask import (
     Blueprint,  redirect, render_template, request, session, url_for, send_from_directory, send_file, Response, jsonify
 )
-from flaskr.auth import login_required, approve_required
+from auth import login_required, approve_required
 import os
 import json
-from .db import GoogleConnector
+from db import GoogleConnector
 
 approve_bp = Blueprint('approve', __name__)
 APPROVE_PASSWORD = "testing123"
