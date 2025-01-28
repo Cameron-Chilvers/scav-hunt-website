@@ -23,7 +23,7 @@ def register():
             error = 'Password is required.'
 
         if any(substring in username for substring in ['\\', '/', '?']):
-            error = 'You cannot include the characters \\, \ or ? in the username'
+            error = r'You cannot include the characters \\, \ or ? in the username'
 
         if error is None:
             try:
