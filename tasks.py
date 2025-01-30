@@ -6,10 +6,12 @@ import os
 import pandas as pd
 from PIL import Image
 from moviepy import VideoFileClip
+import tempfile
 import json
-import glob
-import random
+
 from datetime import datetime
+import io
+from werkzeug.utils import secure_filename
 from pytz import timezone
 import time
 
@@ -96,147 +98,106 @@ def tasks():
     
     return render_template('task/tasks.html', rank = rank, points = points, col_one = col_one_sorted, col_two = col_two_sorted, allow_tasks = allow_tasks)
 
-def compress_and_save_files(file, task_safe, user_folder, output_folder, quality=50, video_bitrate="400k"):
+def compress_file(file, task_safe, quality=40, video_bitrate="200k"):
     """
-    Compress and save image and video files.
+    Compress an image or video file and return a file-like object.
 
     Args:
-        files (list): List of file objects to process.
-        output_folder (str): Path to the folder where compressed files will be saved.
+        file (FileStorage): File object to process.
+        task_safe (str): Safe task identifier to prepend to filename.
         quality (int): Compression quality for images (1-100, higher is better quality).
         video_bitrate (str): Bitrate for video compression (e.g., "800k").
 
     Returns:
-        list: List of paths to the compressed files.
+        tuple: (file-like object, new filename, content_type)
     """
-    compressed_files = []
-
-    # Generate safe filename
-    filename = f"{task_safe}_{file.filename.replace(' ', '-')}"
-
-    # Create temp file path
-    file_path = os.path.join(user_folder, filename)
-    
-    # Save the file locally
-    file.save(file_path)
-
-    # Determine if the file is an image or video based on extension
+    filename = f"{task_safe}_{secure_filename(file.filename)}"
     _, ext = os.path.splitext(filename)
     ext = ext.lower()
 
     if ext in [".jpg", ".jpeg", ".png", ".webp"]:
-        # Compress image
         try:
-            with Image.open(file_path) as img:
-                img = img.convert("RGB")  # Ensure RGB mode for consistency
-                compressed_path = os.path.join(output_folder, filename)
-                img.save(compressed_path, optimize=True, quality=quality)
-                compressed_files.append(compressed_path)
+            img = Image.open(file)
+            img = img.convert("RGB")
+            buffer = io.BytesIO()
+            img.save(buffer, format="JPEG", optimize=True, quality=quality)
+            buffer.seek(0)
+            return buffer, filename, "image/jpeg"
         except Exception as e:
             print(f"Error compressing image {filename}: {e}")
+            return None
 
     elif ext in [".mp4", ".mov", ".avi", ".mkv"]:
-        # Compress video
+       # Use BytesIO to store the video file in memory
+        file.seek(0)  # Ensure we read from the start of the file
+        buffer = io.BytesIO(file.read())
+        buffer.seek(0)  # Reset the buffer's position to the start
+
+        # Write to a temporary file so MoviePy can process it
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_file:
+            temp_file.write(buffer.read())  # Write the video data to the temp file
+            temp_file_path = temp_file.name  # Get the path to the temporary file
+
         try:
-            compressed_path = os.path.join(output_folder, filename)
-            with VideoFileClip(file_path) as video:
-                video.write_videofile(compressed_path, bitrate=video_bitrate, audio_codec="aac")
-                compressed_files.append(compressed_path)
+            # Use VideoFileClip with the path to the temp file
+            with VideoFileClip(temp_file_path) as video:
+                # Write the output to a temporary file
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_output_file:
+                    temp_output_path = temp_output_file.name
+                    video.write_videofile(temp_output_path, bitrate=video_bitrate, audio_codec="aac", threads=4)
+                
+                # Read the output video file into a buffer
+                with open(temp_output_path, "rb") as f:
+                    output_buffer = io.BytesIO(f.read())
+                output_buffer.seek(0)
         except Exception as e:
-            print(f"Error compressing video {filename}: {e}")
+            print(f"Error processing video {filename}: {e}")
+            os.remove(temp_file_path)
+            return None
 
-    else:
-        print(f"Unsupported file type for {filename}. Skipping.")
+        # Clean up the temporary file after processing
+        os.remove(temp_file_path)
 
-    return compressed_files
-
+        return output_buffer, filename, "video/mp4"
+    
+    print(f"Unsupported file type for {filename}. Skipping.")
+    return None
 
 @tsk_bp.route('/upload_files', methods=['POST'])
 @login_required
 def upload_files():
     db: GoogleConnector = tsk_bp.app.config["DATABASE"]
 
-    # Get the activity and personName from the form data
+    # Get the task and personName from the form data
     task = request.form.get('task')
     person_name = request.form.get('name')
 
-    # Replace spaces with '-' in activity and personName
+    # Replace spaces with '-' in task and personName
     task_safe = task.replace(' ', '-')
     person_name_safe = person_name.replace(' ', '-')
 
     # Getting files
     files = request.files.getlist('files')
 
-    # Gettin gfolder path and the user id
-    upload_folder = os.path.join(tsk_bp.app.config['UPLOAD_FOLDER'])
+    # Getting user id
     user_id = session.get('user_id')
 
-    # Creating folder to use to hold temp files
-    user_folder = os.path.join(upload_folder, person_name_safe)
-    if not os.path.exists(user_folder):
-        os.makedirs(user_folder)
-
-    compressed_folder = os.path.join(upload_folder, person_name_safe, 'compressed')
-    if not os.path.exists(compressed_folder):
-        os.makedirs(compressed_folder)
-
+    # Process and upload each file
+    processed_files = []
     for file in files:
-        compress_and_save_files(file=file, task_safe=task_safe, user_folder=user_folder, output_folder=compressed_folder)
+        compressed_file, filename, content_type = compress_file(file, task_safe)
 
-    # Uploading to google drive
-    db.google_drive_file_upload(task_safe, person_name_safe, files, task, user_id, user_folder)
+        if compressed_file:
+            processed_files.append((file, compressed_file, filename, content_type))
 
-    # Task_status here with nothing to preserve time
+    # Upload compressed files directly from memory
+    db.upload_files(person_name_safe, processed_files, task, user_id)
+
+    # Task status update
     db.add_to_task_status(user=person_name, task=task, status="", message='')
-    
+
     return jsonify({"message": "Files uploaded successfully!"})
 
-
-@tsk_bp.route('/gallery')
-@login_required
-def gallery():
-    db: GoogleConnector = tsk_bp.app.config["DATABASE"]
-    all_data = []
-    pic_paths = []
-
-    # Getting the dataframes
-    all_data.append(db.activities['1_point'])
-    all_data.append(db.activities['3_point'])
-    all_data.append(db.activities['5_point'])
-    
-    for df in all_data:
-        filtered_df = df.loc[(df == '1').any(axis=1)]
-
-        # Looping columns
-        for col in filtered_df:
-            # Skipping the activites
-            if col == 'Activities':
-                continue
-            
-            # Filtering by the name
-            only_approved = filtered_df.loc[filtered_df[col] == '1']
-
-            # Getting specific folder
-            upload_folder = os.path.join(tsk_bp.app.config['UPLOAD_FOLDER'])
-            user_folder = os.path.join(upload_folder, col.replace(' ', '-'))
-
-            # Only getting images
-            image_extensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'webp']
-
-            # Getting all photos for it
-            for task in only_approved['Activities'].values.tolist():
-                task_safe = task.replace(' ', '-')
-
-                # Use glob with multiple patterns
-                for ext in image_extensions:
-                    pic_paths.extend(glob.glob(os.path.join(user_folder, "compressed", f"{task_safe}*.{ext}")))
-                    pic_paths.extend(glob.glob(os.path.join(user_folder, "compressed", f"{task_safe}*.{ext.upper()}")))
-
-    # Converting the paths to work with the media files
-    real_pic_paths = [pic_path[15:].replace('compressed\\', '') for pic_path in pic_paths] if len(pic_paths) > 0 else None
-    random.shuffle(real_pic_paths)
-
-    return render_template('task/gallery.html', pic_paths = real_pic_paths)
 
 @tsk_bp.route('/completed_tasks')
 @login_required
@@ -266,6 +227,10 @@ def completed_person(username):
     # Reverting username
     username = username.replace('-', ' ')
 
+    # Getting all the uploded media from the player
+    all_media = db.get_all_media_from_user(username.replace(" ", '-'))
+    print(all_media)
+
     # Getting totals for the user
     totals: pd.DataFrame = db.get_totals()
     row = totals[totals['name'] == username]
@@ -278,33 +243,37 @@ def completed_person(username):
     for k, v in db.activities.items():
         # Gets the remaining tasks
         tasks_base = list(zip(v['Activities'], v[username]))
-        tasks_list = [[activity, status] for activity, status in tasks_base if status == '1']
+        tasks_list = [[activity, status] for activity, status in tasks_base]
         
+        task_df = pd.DataFrame(tasks_list, columns=["Task", "Status"])
+
+        # Grouping all the multiple media to one group
+        grouped_all_media = all_media.groupby("Task").agg(
+        lambda x: list(x)
+        ).reset_index()
+
+        # Only getting the Tasks for the point value
+        media_tasks_filtered = grouped_all_media[grouped_all_media["Task"].isin(task_df["Task"])]
+
+        # Getting the merged data
+        combined_df = pd.merge(task_df, media_tasks_filtered, on="Task", how="left")
+
+        # Combing the columns into json data to be used in the front end
+        final_combined_df = (
+            combined_df[["Task", "Status"]]
+            .assign(media_info=combined_df.iloc[:, 2:].apply(lambda x: json.dumps(x.to_dict()), axis=1))
+            .values.tolist()
+        )
+
+        # Getting clean task name
         formatted_name = k.replace("_", " ")
 
-        # Calculate the number of tasks with status '1'
+        # Calculate the number of tasks with status '1' or '0'
         count = v[v[username].isin(['1'])].shape[0]
         total_tasks = v.shape[0]
 
-        # create the media info
-        for i, task in enumerate(tasks_list):
-            # Skipping if empty
-            if task[1] == '':
-                tasks_list[i].append(dict())
-                continue   
-            
-            # Get the info
-            task_safe = task[0].replace(' ', '-')
-            person_name_safe = username.replace(' ', '-')
-
-            # test to get the google links
-            media_info = {'media_info': json.dumps(db.get_media_from_folder(person_name_safe, task_safe))}
-            
-            # Add back to the task as a dict
-            tasks_list[i].append(media_info)
-
         # Create a list with the formatted name, tasks, and count
-        category_data = [formatted_name, tasks_list, count, total_tasks]
+        category_data = [formatted_name, final_combined_df, count, total_tasks]
 
         # Putting in the correct columns
         if any(i in k for i in ["1", "3"]) and "10" not in k: 

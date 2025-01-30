@@ -48,16 +48,13 @@
                                 </td>
                                 <td>
                                     {% if status == '' %}
-                                        <!-- Upload Button -->
-                                        <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#uploadModal{{ loop.index }}">
-                                            <i class="bi bi-upload"></i>
-                                        </button>
+                                    
                                     {% elif status == "0" %}
                                         <!-- View Button -->
                                         <button type="button" class="btn btn-outline-warning btn-sm"
                                             data-bs-toggle="modal" 
                                             data-bs-target="#viewModal{{ loop.index }}"
-                                            data-media_info="{{ task_media.media_info }}">
+                                            data-media_info="{{ task_media }}">
                                             <i class="bi bi-eye"></i>
                                         </button>
                                     {% else %}
@@ -65,7 +62,7 @@
                                         <button type="button" class="btn btn-outline-success btn-sm"
                                             data-bs-toggle="modal" 
                                             data-bs-target="#viewModal{{ loop.index }}"
-                                            data-media_info="{{ task_media.media_info }}">
+                                            data-media_info="{{ task_media }}">
                                             <i class="bi bi-eye"></i>
                                         </button>
                                     {% endif %}
@@ -120,7 +117,7 @@
                                         <button type="button" class="btn btn-outline-warning btn-sm"
                                             data-bs-toggle="modal" 
                                             data-bs-target="#viewModal{{ loop.index }}"
-                                            data-media_info="{{ task_media.media_info }}">
+                                            data-media_info="{{ task_media }}">
                                             <i class="bi bi-eye"></i>
                                         </button>
                                     {% else %}
@@ -128,7 +125,7 @@
                                         <button type="button" class="btn btn-outline-success btn-sm"
                                             data-bs-toggle="modal" 
                                             data-bs-target="#viewModal{{ loop.index }}"
-                                            data-media_info="{{ task_media.media_info }}">
+                                            data-media_info="{{ task_media }}">
                                             <i class="bi bi-eye"></i>
                                         </button>
                                     {% endif %}
@@ -160,6 +157,14 @@
 
                     // Parse the JSON string into a JavaScript object (array of media items)
                     const mediaCollection = JSON.parse(mediaInfo);
+                    
+                    // Converting the full batch tasks to back to 2d array
+                    const keys = Object.keys(mediaCollection);
+                    const arrayLength = mediaCollection[keys[0]].length;
+
+                    const parsedMediaCollection = Array.from({ length: arrayLength }, (_, rowIndex) =>
+                    keys.map(key => mediaCollection[key][rowIndex])
+                    );
 
                     // Get the modal content container
                     const mediaContentContainer = document.getElementById(`media-content-${modal.id.replace('viewModal', '')}`);
@@ -171,12 +176,13 @@
 
                         // Dynamically generate the media content with placeholders
                         let mediaHtml = '';
-                        mediaCollection.forEach((mediaItem, index) => {
+                        parsedMediaCollection.forEach((mediaItem, index) => {
                             const mediaId = mediaItem[0];  // Media path
                             const mediaType = mediaItem[1];  // Media type (image/video)
                             const mediaName = mediaItem[2]; // File name
                             const userName = mediaItem[3]; // User name
-
+                            const signedUrl = mediaItem[4]; // User name
+                            
                             if (mediaType.includes('image')) {
                                 mediaHtml += `
                                     <div class="carousel-item ${index === 0 ? 'active' : ''}">
@@ -186,7 +192,7 @@
                                                 <span>Loading image...</span>
                                             </div>
                                             <!-- Actual image -->
-                                            <img src="/media/${userName}/${mediaName}" class="d-block w-100 img-fluid media-item position-absolute top-50 start-50 translate-middle" 
+                                            <img src="${signedUrl}" class="d-block w-100 img-fluid media-item position-absolute top-50 start-50 translate-middle" 
                                                 style="display: none;" alt="Image"
                                                 onload="this.previousElementSibling.style.display = 'none'; this.style.display = 'block';">
                                         </div>
@@ -204,7 +210,7 @@
                                             <video controls class="d-block w-100 media-item position-absolute top-50 start-50 translate-middle" 
                                                 style="display: none;" 
                                                 oncanplay="this.previousElementSibling.style.display = 'none'; this.style.display = 'block';">
-                                                <source src="/media/${userName}/${mediaName}" type="video/mp4">
+                                                <source src="${signedUrl}" type="video/mp4">
                                                 Your browser does not support the video tag.
                                             </video>
                                         </div>

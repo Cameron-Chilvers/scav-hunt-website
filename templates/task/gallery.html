@@ -1,18 +1,13 @@
 {% extends 'header.html' %}
 
-{% block header %}
-  <!-- <h1 class="text-center">{% block title %}Othes Tasks{% endblock %}</h1> -->
-{% endblock %}
-
-<!-- List of names here and then u can click them to get to the person page -->
 {% block content %}
 <style>
     .image-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-        gap: 5px; /* Add minimal space between images */
+        gap: 5px;
         padding: 10px;
-        grid-auto-rows: 150px; /* Create rows of consistent height */
+        grid-auto-rows: 150px;
     }
     .image-grid img {
         width: auto;
@@ -24,59 +19,88 @@
         border-radius: 4px;
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         transition: transform 0.2s ease-in-out;
+        cursor: pointer;
     }
     .image-grid img:hover {
         transform: scale(1.05);
     }
-    @media (max-width: 600px) {
-        h1 {
-            font-size: 1.5em;
-        }
-        .image-grid {
-            gap: 3px; /* Reduce spacing for smaller screens */
-            padding: 5px;
-        }
-    }
 </style>
 
-    <div class="container">
-        <h1 style="text-align: center;">Photo Gallery</h1>
-        {% if pic_paths %}
-            <div class="image-grid">
-          
-                {% for pic in pic_paths %}
-                    <img class="rounded" src="media/{{ pic }}" alt="Task Image {{ loop.index }}" data-bs-toggle="modal" data-bs-target="#imageModal">
-                {% endfor %}
-          
-            </div>
-        {% else %}
-            <p class="text-center mt-3">No tasks done :(</p>
-        {% endif %}
-        
-        <!-- Preview Modal -->
-        <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="imageModalLabel">Image Preview</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body">
-                        <img id="modalImage" src="" alt="Selected Image" class="img-fluid rounded mx-auto d-block">
-                    </div>
+<div class="container">
+    <h1 style="text-align: center;">Photo Gallery</h1>
+    <div class="image-grid" id="imageGrid"></div>
+    
+    <div id="loading" class="text-center mt-3">
+        <p>Loading...</p>
+    </div>
+    
+    <!-- Preview Modal -->
+    <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="imageModalLabel">Image Preview</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <img id="modalImage" src="" alt="Selected Image" class="img-fluid rounded">
                 </div>
             </div>
         </div>
-    
-        <script>
-            const images = document.querySelectorAll('.image-grid img');
-            const modalImage = document.getElementById('modalImage');
-    
-            images.forEach(image => {
-                image.addEventListener('click', () => {
-                    modalImage.src = image.src;
-                });
-            });
-        </script>
     </div>
+</div>
+
+<script>
+    let page = 1;
+    let loading = false;
+    let loadedImages = new Set(); // To track already loaded image URLs
+
+    async function loadImages() {
+        if (loading) return;
+        loading = true;
+
+        const response = await fetch(`/load-images?page=${page}`);
+        const data = await response.json();
+        const imageGrid = document.getElementById("imageGrid");
+
+        if (data.length === 0) {
+            document.getElementById("loading").innerHTML = "<p>No more images</p>";
+            return;
+        }
+
+        data.forEach(image => {
+            // Avoid loading duplicate images
+            if (!loadedImages.has(image.url)) {
+                const img = document.createElement("img");
+                img.src = image.url;
+                img.alt = "Task Image";
+                img.classList.add("rounded");
+
+                img.addEventListener("click", () => {
+                    document.getElementById("modalImage").src = img.src;
+                    new bootstrap.Modal(document.getElementById("imageModal")).show();
+                });
+
+                imageGrid.appendChild(img);
+                loadedImages.add(image.url); // Track this image as loaded
+            }
+        });
+
+        page++;
+        loading = false;
+    }
+
+    // Load initial images
+    loadImages();
+
+    // Lazy Load on Scroll
+    const observer = new IntersectionObserver(entries => {
+        if (entries[0].isIntersecting) {
+            loadImages();
+        }
+    }, { threshold: 0.5 });
+
+    observer.observe(document.getElementById("loading"));
+</script>
+
 {% endblock %}

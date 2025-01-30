@@ -24,7 +24,7 @@
             <a class="nav-item nav-link" href="{{ url_for('tasks.tasks') }}">My Tasks</a>
             <a class="nav-item nav-link" href="{{ url_for('home.updates') }}">My Updates</a>
             <a class="nav-item nav-link" href="{{ url_for('tasks.completed') }}">All Completed Tasks</a>
-            <a class="nav-item nav-link" href="{{ url_for('tasks.gallery') }}">Photo Gallery</a>
+            <a class="nav-item nav-link" href="{{ url_for('home.gallery') }}">Photo Gallery</a>
             
             {% if session.get('user_id') == 'cameron' %}
               <a class="nav-item nav-link" href="{{ url_for('approve.approve_tasks') }}">Approve</a>

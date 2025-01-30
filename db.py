@@ -6,6 +6,8 @@ from googleapiclient.http import MediaFileUpload
 from googleapiclient import _auth
 from googleapiclient.errors import HttpError
 from google_auth_oauthlib.flow import InstalledAppFlow
+from google.cloud import storage
+from datetime import timedelta
 
 import pandas as pd
 import os
@@ -14,33 +16,27 @@ import time
 import threading
 from datetime import datetime
 
+# Simple in-memory cache with expiration (global dictionary)
+signed_url_cache = {}
 
-# Function to delete files
-def delete_files(user_folder):
-    globbed_files = glob.glob(user_folder + "\\*")
-    filtered_files = [f for f in globbed_files if "compressed" not in f]
+# Set a cache entry with expiration
+def set_cache_with_expiration(key, value, ttl_seconds):
+    expiration_time = time.time() + ttl_seconds
+    signed_url_cache[key] = {'url': value, 'expires_at': expiration_time}
 
-    max_retries = 10
-    for file in filtered_files:
-        time.sleep(2)  # add small delay not to spam
-        
-        print("Deleting file...")
-        tries = 0
-        while tries < max_retries:
-            try:
-                os.remove(file)
-                tries = 6
-                print("Finished deleting.")
-            except Exception as e:
-                tries += 1
-                print(f"Failed to delete file. Error: {e}. Retrying...")
-                time.sleep(2)
-
+# Get a cache entry, checking if it's expired
+def get_cache_with_expiration(key):
+    cache_entry = signed_url_cache.get(key)
+    if cache_entry and cache_entry['expires_at'] > time.time():
+        return cache_entry['url']
+    else:
+        return None
 
 
 class GoogleConnector:
     def __init__(self, scopes = ["https://www.googleapis.com/auth/spreadsheets", 
-                                 'https://www.googleapis.com/auth/drive'], 
+                                 'https://www.googleapis.com/auth/drive',
+                                'https://www.googleapis.com/auth/devstorage.full_control'], 
                  credential_path = r"credentials.json", 
                  sheet_id = "1Ue-ugS6uAHgjY6rOvcbGNK92AKasbJiLINxpWmoKtvE", 
                  folder_id='1wClLnyxbprifajhcqJenXD1zdAC79IMk'):
@@ -63,6 +59,10 @@ class GoogleConnector:
         self.http = _auth.authorized_http(creds)
         self.__drive_service = build('drive', 'v3', http=self.http)
 
+        # Storage Client
+        self.__bucket_client = storage.Client(credentials=creds, project="jpscavdb")
+        self.__bucket_name = 'jp_scav_media'
+        self.__bucket = self.__bucket_client.bucket(self.__bucket_name)
 
         # Used for filtering
         self.__activity_worksheets = ["1_point", "3_point", "5_point", "7_point", "10_point"]
@@ -84,7 +84,15 @@ class GoogleConnector:
     class UserDoesNotExistError(Exception):
         """Raised when there is an error adding a user to the database."""
         pass
-    
+
+
+#######################################################################################################################################
+
+# GOOGLE SHEET STUFF BELOW
+
+#######################################################################################################################################
+
+
     def __get_time_now(self):
         # Format the date and time
         now = datetime.now()
@@ -260,7 +268,7 @@ class GoogleConnector:
 
             # Getting last index
             first_empty_index = len(row_values) + 1            
-            print(first_empty_index)
+
             # Updating the last index
             worksheet.update_cell(1, first_empty_index, username)
 
@@ -317,135 +325,7 @@ class GoogleConnector:
         # Changing the task cell value        
         worksheet.update_cell(task_cell.row, user_cell.col, str(value))
 
-    # Adding files to google drive
-    def google_drive_file_upload(self, task_safe, person_name_safe, files, task, user_id, user_folder):
-        # Check if the folder exists in Google Drive
-        user_folder_id = self.get_folder_id(person_name_safe)
-
-        if user_folder_id is None:
-            # Create the folder if it doesn't exist
-            folder_metadata = {
-                'name': person_name_safe,
-                'mimeType': 'application/vnd.google-apps.folder',
-                'parents': [self.__folder_id]
-            }
-            folder = self.__drive_service.files().create(body=folder_metadata, fields='id').execute()
-            user_folder_id = folder['id']
-
-        # Save each file to the user's folder
-        for file in files:
-            filename = f"{task_safe}_{file.filename.replace(' ', '-')}"
-            
-           # Creating temp file
-            file_path = os.path.join(user_folder, filename)
-    
-            # # Save the file locally
-            # file.save(file_path)
-
-            # Prepare metadata for the file
-            file_metadata = {
-                'name': filename,
-                'parents': [user_folder_id]
-            }
-
-            # Use the temporary file path for MediaFileUpload
-            media = MediaFileUpload(
-                file_path,
-                mimetype=file.mimetype,
-                resumable=True
-            )
-
-            # Upload the file to Google Drive
-            self.__drive_service.files().create(
-                body=file_metadata,
-                media_body=media,
-                fields='id'
-            ).execute()
-
-        # Clean up the temporary files in the background
-        threading.Thread(target=delete_files, args=(user_folder,)).start()                             
-
-        # Update the database for the given task
-        for key, value in self.activities.items():
-            if task not in [activity for activity in value['Activities']]:
-                continue
-
-            # Update Dataframe
-            value.loc[value['Activities'] == task, user_id] = '0'
-
-            # Call the database update method
-            self.change_task(key, task, '0', user_id)
-
-    # Function to get folder ID by name
-    def get_folder_id(self, folder_name):
-        query = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and '{self.__folder_id}' in parents"
-        results = self.__drive_service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
-        items = results.get('files', [])
-        if not items:
-            return None
-        return items[0]['id']
-
-    # Function to search for image files inside a folder
-    def search_media_in_folder(self, folder_id, task_name):
-        query = f"'{folder_id}' in parents and (mimeType contains 'image/' or mimeType contains 'video/') and name contains '{task_name}'"
-        results = self.__drive_service.files().list(q=query, fields="files(id, name, mimeType)").execute()
-        items = results.get('files', [])
-        return items
-
-    # Functions gets all media
-    def search_all_media_in_folder(self, folder_id):
-        query = f"'{folder_id}' in parents and (mimeType contains 'image/' or mimeType contains 'video/')"
-        results = self.__drive_service.files().list(q=query, fields="files(id, name, mimeType)").execute()
-        items = results.get('files', [])
-        return items
-
-    # New method to view images in a specific folder
-    def get_media_from_folder(self, user_folder_name, task_name):
-        # Get the user folder ID
-        user_folder_id = self.get_folder_id(user_folder_name)
-        if not user_folder_id:
-            return f"User folder '{user_folder_name}' not found", 404
-
-        # List all images and videos inside the pictures folder
-        media_files = self.search_media_in_folder(user_folder_id, task_name)
-        if not media_files:
-            return "No media files found in the pictures folder", 404
-
-        # Generate list of media
-        media_list = [(media['id'], media['mimeType'], media['name'], user_folder_name) for media in media_files]
-
-        return media_list 
-    
-    # Getting all media to make it a faster query
-    def get_all_media_from_user(self, user_folder_name):
-        # Check if folder is there
-        user_folder_id = self.get_folder_id(user_folder_name)
-        if not user_folder_id:
-            return pd.DataFrame(columns=['id', 'mimeType', 'filename', 'name', 'Task'])
-
-        # List all images and videos inside the pictures folder
-        media_files = self.search_all_media_in_folder(user_folder_id)
-        if not media_files:
-            return pd.DataFrame(columns=['id', 'mimeType', 'filename', 'name', 'Task'])
-        
-        # Generate list of media
-        media_list = pd.DataFrame([(media['id'], media['mimeType'], media['name'], user_folder_name, media['name'].split('_')[0].replace('-', ' ')) for media in media_files]
-                                  , columns=['id', 'mimeType', 'filename', 'name', 'Task'])
-
-        return media_list 
-
-    def get_file_mine_name(self, file_id):
-        print(f"Fetching metadata for file ID: {file_id}")
-
-        file_metadata = self.__drive_service.files().get(fileId=file_id, fields='mimeType, name').execute()
-
-        mime_type = file_metadata.get('mimeType', 'application/octet-stream')
-        file_name = file_metadata.get('name', 'file')
-        return mime_type,file_name
-    
-    def get_google_drive_service(self):
-        return self.__drive_service
-    
+    # Adding to the stask status sheet
     def add_to_task_status(self, user, task, status, message):
         worksheet = self.__sheet.worksheet("task_status")
 
@@ -458,6 +338,7 @@ class GoogleConnector:
             # Throw exception if there is an error adding the user
             raise self.UserAdditionError(f"Failed to add recent tas: {task} for user '{user}': {str(e)}")
     
+    # Changing the task status
     def edit_task_status(self, user, task, status, message):
         # Get the task_status data
         data, cols = self.__get_worksheet_data("task_status")
@@ -480,7 +361,6 @@ class GoogleConnector:
             # Throw exception if there is an error adding the user
             raise self.UserAdditionError(f"Failed to update the status table: {str(e)}")
 
-        
     # Getting the task status
     def get_task_status(self):
         # Getting the totals sheet
@@ -490,26 +370,6 @@ class GoogleConnector:
         hist_df = pd.DataFrame(hist_data, columns=cols)
 
         return hist_df
-    
-    def detete_from_drive(self, task_name, user_name):
-        # Get the user folder ID
-        user_folder_id = self.get_folder_id(user_name)
-        if not user_folder_id:
-            return f"User folder '{user_name}' not found", 404
-
-        # List all images and videos inside the pictures folder
-        media_files = self.search_media_in_folder(user_folder_id, task_name)
-        if not media_files:
-            return "No media files found in the pictures folder", 404
-
-        # Loop file and delete from the drive
-        for file in media_files:
-            file_id = file["id"]
-            try:
-                self.__drive_service.files().delete(fileId=file_id).execute()
-                print(f"Deleted file with ID: {file}")
-            except HttpError as error:
-                print(f"An error occurred for file ID {file_id}: {error}")
     
     # get the read rules flag
     def get_read_rules(self, username):
@@ -534,3 +394,162 @@ class GoogleConnector:
 
         # Changing the task cell value        
         worksheet.update_cell(user_cell.row, 4, value)
+
+
+#######################################################################################################################################
+
+# GOOGLE BUCKET STUFF BELOW
+
+#######################################################################################################################################
+
+    # Check if user folder exists
+    def check_folder_exists(self, folder_name):
+        folder_prefix = f"{folder_name}/"
+        blobs = list(self.__bucket.list_blobs(prefix=folder_prefix, max_results=1))
+        return len(blobs) > 0
+
+    # creating the "folder" structre needed for the pictures
+    def create_user_folder(self, username):
+        folder_name = username.replace(' ', '-')  # Normalize folder name
+
+        if self.check_folder_exists(folder_name):
+            print(f"Folder {folder_name} exists")
+            return
+
+        # Folder path (empty object with a trailing slash)
+        folder_blob = self.__bucket.blob(f"{folder_name}/")
+
+        # Creating parent folder
+        try:
+            folder_blob.upload_from_string('')  # Create an empty object
+            print(f"Created folder: {folder_name}/")
+        except Exception as e:
+            print(f"Error creating folder: {e}")
+            raise
+
+        # Create a "compressed" subfolder
+        compressed_folder_blob = self.__bucket.blob(f"{folder_name}/compressed/")
+        try:
+            compressed_folder_blob.upload_from_string('')
+            print(f"Created subfolder: {folder_name}/compressed/")
+        except Exception as e:
+            print(f"Error creating subfolder: {e}")
+            raise                
+
+    # Upload files here
+    def upload_files(self, person_name_safe, files, task, user_id):
+        user_folder_path = f"{person_name_safe}/"
+        user_folder_path_compressed = f"{person_name_safe}/compressed/"
+
+        # Creating the subdirectory in cloud storage (if needed)
+        self.create_user_folder(person_name_safe)
+
+        for original_file, compressed_file, filename, content_type in files:
+            # Reset file read from compression
+            original_file.seek(0)  
+
+            # Upload original file
+            blob_path_original = f"{user_folder_path}{filename}"
+            blob_original = self.__bucket.blob(blob_path_original)
+            blob_original.upload_from_file(original_file, content_type=content_type)
+            print(f"Uploaded original {filename} to {blob_path_original}")
+
+            # Upload compressed file
+            blob_path_compressed = f"{user_folder_path_compressed}{filename}"
+            blob_compressed = self.__bucket.blob(blob_path_compressed)
+            blob_compressed.upload_from_file(compressed_file, content_type=content_type)
+            print(f"Uploaded compressed {filename} to {blob_path_compressed}")
+
+        # Update the database for the given task
+        for key, value in self.activities.items():
+            if task not in value['Activities'].values.tolist():
+                continue
+            
+            # Update DataFrame
+            value.loc[value['Activities'] == task, user_id] = '0'
+
+            # Call the database update method
+            self.change_task(key, task, '0', user_id)
+
+    # Getting all the media the user has uploaded
+    def get_all_media_from_user(self, user_folder_name):
+        bucket = self.__bucket  # Assuming `self.__bucket` is a `google.cloud.storage.Bucket` instance
+        user_folder_path = f"{user_folder_name}/compressed/"  # Ensure folder path format
+
+        # List all files in the user's folder
+        blobs = list(bucket.list_blobs(prefix=user_folder_path))
+
+        # If no files found, return an empty DataFrame
+        if not blobs:
+            return pd.DataFrame(columns=['id', 'mimeType', 'filename', 'name', 'Task', 'signed_url'])
+
+        # Extract metadata
+        media_list = pd.DataFrame(
+            [
+                (
+                    blob.name,  # File "ID" (GCS uses full path as identifier)
+                    blob.content_type,  # MIME type
+                    blob.name.split('/')[-1],  # Filename
+                    user_folder_name,  # User folder name
+                    blob.name.split('/')[-1].split('_')[0].replace('-', ' '),  # Task name (parsed from filename)
+                    self.generate_or_get_cached_signed_url(self.__bucket.name, blob.name)  # Get signed URL
+                )
+                for blob in blobs if not blob.name.endswith('/')  # Exclude "directory" placeholders
+            ],
+            columns=['id', 'mimeType', 'filename', 'name', 'Task', 'signed_url']  # Added 'signed_url' column
+        )
+
+        return media_list
+    
+    # Generate a signed URL (or retrieve from cache)
+    def generate_or_get_cached_signed_url(self, bucket_name, blob_name, expiry_time = 60):
+        cache_key = f"signed_url:{bucket_name}:{blob_name}"
+
+        # Check if the signed URL is already in the cache
+        cached_url = get_cache_with_expiration(cache_key)
+        if cached_url:
+            return cached_url
+
+        # Generate a new signed URL
+        blob = self.__bucket.blob(blob_name)
+
+        signed_url = blob.generate_signed_url(
+            version="v4",
+            expiration=timedelta(minutes=expiry_time),  # URL expires in 15 minutes
+            method="GET"  # Read-only access
+        )
+
+        # Cache the signed URL with a slightly shorter expiration time (e.g., 14 minutes)
+        set_cache_with_expiration(cache_key, signed_url, ttl_seconds=expiry_time*60)
+
+        return signed_url
+
+    # Deleting from the google storage
+    def delete_from_storage(self, task_name, user_name, compressed):
+        bucket = self.__bucket  # Assuming `self.__bucket` is a `google.cloud.storage.Bucket` instance
+        if compressed == True:
+            user_folder_path = f"{user_name}/compressed/"  # Deleteing the ones from the compressed files
+        else:
+            user_folder_path = f"{user_name}/"  # Deleting from the main folder path
+
+        # List all files in the user's folder
+        blobs = list(bucket.list_blobs(prefix=user_folder_path))
+
+        if not blobs:
+            return f"No files found for user '{user_name}'", 404
+
+        # Filter files related to the task
+        task_files = [blob for blob in blobs if blob.name.startswith(f"{user_folder_path}{task_name}_")]
+
+        if not task_files:
+            return f"No files found for task '{task_name}' in '{user_name}'", 404
+        
+        # Delete each file
+        for blob in task_files:
+            try:
+                blob.delete()
+                print(f"Deleted file: {blob.name}")
+            except Exception as e:
+                print(f"Error deleting {blob.name}: {e}")
+
+        return f"Deleted all files for task '{task_name}' in '{user_name}'", 200

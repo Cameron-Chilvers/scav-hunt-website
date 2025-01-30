@@ -5,6 +5,7 @@ from auth import login_required, approve_required
 import os
 import json
 from db import GoogleConnector
+import pandas as pd
 
 approve_bp = Blueprint('approve', __name__)
 APPROVE_PASSWORD = "testing123"
@@ -16,24 +17,62 @@ def approve_tasks():
     db: GoogleConnector = approve_bp.app.config["DATABASE"]
 
     unapproved_tasks = []
+    unique_people = set()
+
     for k, v in db.activities.items():
         # Transpose to get the '0's
         melted_df = v.melt(id_vars=['Activities'], var_name='Name', value_name='Value')
         filtered_df = melted_df[melted_df['Value'] == '0']
         results = filtered_df[['Activities', 'Name']].to_dict('records')
         
+        # Collect unique people from the filtered results
+        unique_people.update(task['Name'] for task in results)
+    
+    # Fetch media once per unique person
+    all_user_media = {person: db.get_all_media_from_user(person.replace(' ', '-')) for person in unique_people}
+    
+    for k, v in db.activities.items():
+        # Transpose to get the '0's
+        melted_df = v.melt(id_vars=['Activities'], var_name='Name', value_name='Value')
+        filtered_df = melted_df[melted_df['Value'] == '0']
+        results = filtered_df[['Activities', 'Name']].to_dict('records')
+        
+        # Added people
+        already_added = set()
+
         for task_collection in results:
-            # makeing file name safe
+            # Making file name safe
             task_safe = task_collection['Activities'].replace(' ', '-')
             person_name_safe = task_collection['Name'].replace(' ', '-')
 
-            # test to get the google links
-            task_collection['media_info'] = json.dumps(db.get_media_from_folder(person_name_safe, task_safe))
-    
-        unapproved_tasks += results
+            # Only addding tasks once per person
+            if person_name_safe not in already_added:
+                already_added.add(person_name_safe)
+            else:
+                continue
 
-    return render_template('home/approve.html', unapproved_tasks = unapproved_tasks)
+            # Use pre-fetched media info
+            media_info_df = all_user_media.get(task_collection['Name'], pd.DataFrame())
+            
+            # Grouping all media by Task
+            grouped_all_media = media_info_df.groupby("Task").agg(lambda x: list(x)).reset_index()
+            
+            # Only getting the Tasks for the specific person
+            media_tasks_filtered = grouped_all_media[grouped_all_media["Task"].isin(filtered_df["Activities"])]
+            
+            # Getting the merged data
+            combined_df = pd.merge(filtered_df, media_tasks_filtered, left_on="Activities", right_on="Task", how="left")
+            
+            # Combining the columns into JSON data for the front end
+            final_combined_df = (
+                combined_df[["Activities", "Name"]]
+                .assign(media_info=combined_df.iloc[:, 2:].apply(lambda x: json.dumps(x.to_dict()), axis=1))
+                .to_dict(orient='records')
+            )
+            
+            unapproved_tasks += final_combined_df
 
+    return render_template('home/approve.html', unapproved_tasks=unapproved_tasks)
 
 @approve_bp.route('/approve_task/<string:task_name>/<string:user_name>', methods=['POST'])
 @approve_required
@@ -96,8 +135,9 @@ def deny_task(task_name, user_name, deny_message):
             # Call the database update method
             db.change_task(key, task_real, '', name_real)
 
-            # Delete from google drive
-            db.detete_from_drive(task_name=task_name, user_name=user_name)
+            # Delete from bucket
+            db.delete_from_storage(task_name=task_name, user_name=user_name, compressed=False)
+            db.delete_from_storage(task_name=task_name, user_name=user_name, compressed=True)
 
             # Add to the task messge db 
             db.edit_task_status(user=name_real, task=task_real, status="0", message=deny_message_real)

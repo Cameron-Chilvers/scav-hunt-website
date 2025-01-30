@@ -2,6 +2,28 @@
 
 {% block header %}
   <!-- <h1>{% block title %}View Tasks{% endblock %}</h1> -->
+
+  <!-- Bootstrap Toast for Success/Error Notifications -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+    <div id="successToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+      <div class="toast-header bg-success text-white">
+        <strong class="me-auto">Success</strong>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+      </div>
+      <div class="toast-body">
+        Task completed successfully!
+      </div>
+    </div>
+    <div id="errorToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+      <div class="toast-header bg-danger text-white">
+        <strong class="me-auto">Error</strong>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+      </div>
+      <div class="toast-body">
+        Failed to complete the task. Please try again.
+      </div>
+    </div>
+  </div>
 {% endblock %}
 
 {% block content %}
@@ -61,6 +83,19 @@
                     // Parse the JSON string into a JavaScript object (array of media items)
                     const mediaCollection = JSON.parse(mediaInfo);
 
+                    // Clean the mediaCollection as extra data parsed in
+                    const cleanedMediaCollection = mediaCollection
+                    delete cleanedMediaCollection['Value']
+                    delete cleanedMediaCollection['Task']
+
+                    // Converting the full batch tasks to back to 2d array
+                    const keys = Object.keys(cleanedMediaCollection);
+                    const arrayLength = cleanedMediaCollection[keys[0]].length;
+
+                    const parsedMediaCollection = Array.from({ length: arrayLength }, (_, rowIndex) =>
+                    keys.map(key => cleanedMediaCollection[key][rowIndex])
+                    );
+                                        
                     // Get the modal content container
                     const mediaContentContainer = document.getElementById(`media-content-${modal.id.replace('pictureModal', '')}`);
 
@@ -71,12 +106,13 @@
 
                         // Dynamically generate the media content with placeholders
                         let mediaHtml = '';
-                        mediaCollection.forEach((mediaItem, index) => {
+                        parsedMediaCollection.forEach((mediaItem, index) => {
                             const mediaId = mediaItem[0];  // Media path
                             const mediaType = mediaItem[1];  // Media type (image/video)
                             const mediaName = mediaItem[2]; // File name
                             const userName = mediaItem[3]; // User name
-
+                            const signedUrl = mediaItem[4]; // Url
+                            
                             if (mediaType.includes('image')) {
                                 mediaHtml += `
                                     <div class="carousel-item ${index === 0 ? 'active' : ''}">
@@ -86,7 +122,7 @@
                                                 <span>Loading image...</span>
                                             </div>
                                             <!-- Actual image -->
-                                            <img src="/media/${userName}/${mediaName}" class="d-block w-100 img-fluid media-item position-absolute top-50 start-50 translate-middle" 
+                                            <img src="${signedUrl}" class="d-block w-100 img-fluid media-item position-absolute top-50 start-50 translate-middle" 
                                                 style="display: none;" alt="Image"
                                                 onload="this.previousElementSibling.style.display = 'none'; this.style.display = 'block';">
                                         </div>
@@ -104,7 +140,7 @@
                                             <video controls class="d-block w-100 media-item position-absolute top-50 start-50 translate-middle" 
                                                 style="display: none;" 
                                                 oncanplay="this.previousElementSibling.style.display = 'none'; this.style.display = 'block';">
-                                                <source src="/media/${userName}/${mediaName}" type="video/mp4">
+                                                <source src="${signedUrl}" type="video/mp4">
                                                 Your browser does not support the video tag.
                                             </video>
                                         </div>
@@ -163,7 +199,12 @@
             .then(response => response.json())
             .then(data => {
                 console.log(data)
-                location.reload(); // Reload the page to reflect changes
+                // Show success toast
+                const successToast = new bootstrap.Toast(document.getElementById('successToast'));
+                successToast.show();
+
+                // Reload the page after a short delay
+                setTimeout(() => location.reload(), 2000);
             })
             .catch(error => {
                 console.error('Error:', error);
@@ -197,12 +238,24 @@
             })
             .then(response => response.json())
             .then(data => {
-                console.log(data)
-                location.reload(); // Reload the page to reflect changes
+                console.log(data);
+                // Show success toast
+                const successToast = new bootstrap.Toast(document.getElementById('successToast'));
+                successToast.show();
+
+                // Reload the page after a short delay
+                setTimeout(() => location.reload(), 2000);
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('Failed to deny task.');
+                // Show error toast
+                const errorToast = new bootstrap.Toast(document.getElementById('errorToast'));
+                errorToast.show();
+
+                // Re-enable buttons and hide spinner
+                denySpinner.classList.add('d-none');
+                approveButton.disabled = false;
+                denyButton.disabled = false;
             });
         }
     </script>

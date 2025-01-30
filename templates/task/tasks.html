@@ -205,6 +205,7 @@
                             const mediaType = mediaItem[1];  // Media type (image/video)
                             const mediaName = mediaItem[2]; // File name
                             const userName = mediaItem[3]; // User name
+                            const signedUrl = mediaItem[4]; // User name
 
                             if (mediaType.includes('image')) {
                                 mediaHtml += `
@@ -215,7 +216,7 @@
                                                 <span>Loading image...</span>
                                             </div>
                                             <!-- Actual image -->
-                                            <img src="/media/${userName}/${mediaName}" class="d-block w-100 img-fluid media-item position-absolute top-50 start-50 translate-middle" 
+                                            <img src="${signedUrl}" class="d-block w-100 img-fluid media-item position-absolute top-50 start-50 translate-middle" 
                                                 style="display: none;" alt="Image"
                                                 onload="this.previousElementSibling.style.display = 'none'; this.style.display = 'block';">
                                         </div>
@@ -233,7 +234,7 @@
                                             <video controls class="d-block w-100 media-item position-absolute top-50 start-50 translate-middle" 
                                                 style="display: none;" 
                                                 oncanplay="this.previousElementSibling.style.display = 'none'; this.style.display = 'block';">
-                                                <source src="/media/${userName}/${mediaName}" type="video/mp4">
+                                                <source src="${signedUrl}" type="video/mp4">
                                                 Your browser does not support the video tag.
                                             </video>
                                         </div>

@@ -1,11 +1,13 @@
 from flask import (
-    Blueprint, flash, redirect, render_template, request, session, url_for
+    Blueprint,  redirect, render_template, request, session, url_for, jsonify
 )
-from werkzeug.exceptions import abort
 from db import GoogleConnector
 
 from auth import login_required, read_rules_required
 import pandas as pd
+import glob
+import random
+import os
 
 home_bp = Blueprint('home', __name__)
 
@@ -101,19 +103,6 @@ def test_stuff():
     db: GoogleConnector = home_bp.app.config["DATABASE"]
     username = session.get('user_id')
 
-
-    db.send_email(
-    sender_email="jpscavdb@jpscavdb.iam.gserviceaccount.com",
-    recipient_email="awin7052@gmail.com",
-    subject="Hello from cameron website",
-    body="This is a test email sent from my scav hunt website!")
-
-    db.send_email(
-    sender_email="jpscavdb@jpscavdb.iam.gserviceaccount.com",
-    recipient_email="camchilvers123@gmail.com",
-    subject="Hello from cameron website",
-    body="This is a test email sent from my scav hunt website!")
-
     db.update_totals()
     return 'hellow'
 
@@ -137,3 +126,66 @@ def rules():
 
 
     return render_template('home/rules.html', read_rules = read_rules)
+
+@home_bp.route('/gallery')
+@login_required
+def gallery():
+    # Clearing the loaded_images statr
+    session.pop('loaded_images', None)
+    
+    return render_template('task/gallery.html')
+
+@home_bp.route('/load-images')
+def load_images():
+    """Returns a paginated JSON list of signed image URLs."""
+    page = int(request.args.get("page", 1))
+    page_size = 10  # Load images in batches
+
+    # Initialize the session set if it doesn't exist
+    if 'loaded_images' not in session:
+        session['loaded_images'] = dict()
+
+    db: GoogleConnector = home_bp.app.config["DATABASE"]
+    all_data = []
+    urls = []
+
+    # Getting the dataframes
+    all_data.append(db.activities['1_point'])
+    all_data.append(db.activities['3_point'])
+    all_data.append(db.activities['5_point'])
+    
+    for df in all_data:
+        filtered_df = df.loc[(df == '1').any(axis=1)]
+
+        # Looping columns
+        for col in filtered_df:
+            # Skipping the activites
+            if col == 'Activities':
+                continue
+            
+            # Filtering by the name
+            only_approved = filtered_df.loc[filtered_df[col] == '1']
+
+            # Getting specific folder
+            username = col.replace(' ', '-')
+
+            # Get the blobs from the db
+            bucket_data_df = db.get_all_media_from_user(username)
+            
+            # Filter so only images and only approved tasks
+            filtered_bucket_data_df = bucket_data_df[(bucket_data_df['mimeType'].str.contains('image')) 
+                                                     & (bucket_data_df['Task'].isin(only_approved['Activities']))
+                                                     & (~bucket_data_df['signed_url'].isin(session['loaded_images'].keys()))]
+
+            session['loaded_images'].update({value: f"yay url" for value in filtered_bucket_data_df['signed_url']})
+
+            # Filter them so they only take the singed url column
+            urls.extend(filtered_bucket_data_df['signed_url'].values.tolist())
+    
+    # Shuffle urls at the start
+    random.shuffle(urls)
+
+    # Paginate blobs based on the page number
+    images = [{"url": url} for url in urls[(page - 1) * page_size : page * page_size]]
+    
+    return jsonify(images)
