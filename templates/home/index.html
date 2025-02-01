@@ -96,8 +96,13 @@
             <div class="col-sm-6">
                 <h4 class="text-center">You are rank <strong>{{ rank }}</strong></h4>
                 {% if rank != 1 %}
-                    <p class="text-center">Only <c class="text-primary">{{ player_above[1] }}</c> points behind <a style="color: #006fee;" href="/completed_tasks/{{ player_above[0] |replace(' ', '-')| lower }}" class="text-capitalize">{{ player_above[0] }}</a>
-                        <br>Keep completing tasks!!</p>
+                    {% if player_above[1] == 0 %}
+                    <p class="text-center">You are TIED with <a style="color: #006fee;" href="/completed_tasks/{{ player_above[0] |replace(' ', '-')| lower }}" class="text-capitalize">{{ player_above[0] }}</a>
+                        <br>Complete one more task to beat them!!</p>
+                    {% else %}
+                        <p class="text-center">Only <c class="text-primary">{{ player_above[1] }}</c> points behind <a style="color: #006fee;" href="/completed_tasks/{{ player_above[0] |replace(' ', '-')| lower }}" class="text-capitalize">{{ player_above[0] }}</a>
+                            <br>Keep completing tasks!!</p>
+                    {% endif %}
                 {% else %}
                     <p class="text-center">You are the highest rank player!
                         <br>Good luck keeping the lead 🫡</p>
