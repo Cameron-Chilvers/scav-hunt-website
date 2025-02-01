@@ -15,11 +15,13 @@ APPROVE_PASSWORD = "testing123"
 @login_required
 def approve_tasks():    
     db: GoogleConnector = approve_bp.app.config["DATABASE"]
+    nickname_lookup = approve_bp.app.config['NICKNAME_LOOKUP']
 
     unapproved_tasks = []
     unique_people = set()
-
-    for k, v in db.activities.items():
+    activites = db.get_activities()
+    
+    for k, v in activites.items():
         # Transpose to get the '0's
         melted_df = v.melt(id_vars=['Activities'], var_name='Name', value_name='Value')
         filtered_df = melted_df[melted_df['Value'] == '0']
@@ -31,7 +33,7 @@ def approve_tasks():
     # Fetch media once per unique person
     all_user_media = {person: db.get_all_media_from_user(person.replace(' ', '-')) for person in unique_people}
     
-    for k, v in db.activities.items():
+    for k, v in activites.items():
         # Transpose to get the '0's
         melted_df = v.melt(id_vars=['Activities'], var_name='Name', value_name='Value')
         filtered_df = melted_df[melted_df['Value'] == '0']
@@ -56,21 +58,30 @@ def approve_tasks():
             
             # Grouping all media by Task
             grouped_all_media = media_info_df.groupby("Task").agg(lambda x: list(x)).reset_index()
-            
+        
             # Only getting the Tasks for the specific person
             media_tasks_filtered = grouped_all_media[grouped_all_media["Task"].isin(filtered_df["Activities"])]
             
             # Getting the merged data
             combined_df = pd.merge(filtered_df, media_tasks_filtered, left_on="Activities", right_on="Task", how="left")
-            
-            # Combining the columns into JSON data for the front end
+
+            # Only getting the correct Name
+            combined_df = combined_df[combined_df['Name'] == task_collection['Name']]
+
+            # Add a nickname column using the nickname_lookup dictionary
+            combined_df.loc[:, 'Nickname'] = combined_df['Name'].map(nickname_lookup)
+
+           # Combining the columns into JSON data for the front end
             final_combined_df = (
-                combined_df[["Activities", "Name"]]
-                .assign(media_info=combined_df.iloc[:, 2:].apply(lambda x: json.dumps(x.to_dict()), axis=1))
+                combined_df[["Activities", "Name", "Nickname", "uploaded_time"]]
+                .assign(media_info=combined_df.iloc[:, 2:-2].apply(lambda x: json.dumps(x.to_dict()), axis=1))
                 .to_dict(orient='records')
             )
-            
+
             unapproved_tasks += final_combined_df
+
+    # Sort efficiently using pre-extracted `uploaded_time`
+    unapproved_tasks.sort(key=lambda task: task.get("uploaded_time", pd.NaT))
 
     return render_template('home/approve.html', unapproved_tasks=unapproved_tasks)
 
@@ -83,10 +94,12 @@ def approve_task(task_name, user_name):
     # Getting the task names stored in the database
     task_real = task_name.replace('-', ' ')
     name_real = user_name.replace('-', ' ')
+    
+    activites = db.get_activities()
 
     # Try to update the database for the given task
     try:
-        for key, value in db.activities.items():
+        for key, value in activites.items():
             if task_real not in [activity for activity in value['Activities']]:
                 continue
             # Get point value
@@ -123,9 +136,11 @@ def deny_task(task_name, user_name, deny_message):
     name_real = user_name.replace('-', ' ')              
     deny_message_real = deny_message.replace('-', ' ')
 
+    activities = db.get_activities()
+
     # Try to update the database for the given task
     try:
-        for key, value in db.activities.items():
+        for key, value in activities.items():
             if task_real not in [activity for activity in value['Activities']]:
                 continue
 
@@ -180,9 +195,3 @@ def approve_login():
         </div>
         </div>
     '''
-
-# Route to make the image appear
-@approve_bp.route('/media/<username>/<filename>')
-@login_required
-def uploaded_file(username, filename):
-    return send_from_directory(os.path.join(approve_bp.app.config['UPLOAD_FOLDER'], username, 'compressed'), filename)

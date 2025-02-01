@@ -1,29 +1,29 @@
 {% for task, status, task_media in tasks %}
     {% if status == '' %}
-        <div class="modal fade" id="uploadModal{{ loop.index }}" tabindex="-1" aria-labelledby="uploadModalLabel{{ loop.index }}" aria-hidden="true">
+        <div class="modal fade" id="uploadModal{{ category|replace(' ', '_') }}_{{ loop.index0 }}" tabindex="-1" aria-labelledby="uploadModalLabel{{ category|replace(' ', '_') }}_{{ loop.index0 }}" aria-hidden="true">
             <div class="modal-dialog modal-lg">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="uploadModalLabel{{ loop.index }}">Upload Pictures/Videos for {{ task }}</h5>
+                        <h5 class="modal-title" id="uploadModalLabel{{ category|replace(' ', '_') }}_{{ loop.index0 }}">Upload Pictures/Videos for {{ task }}</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
                         <!-- Upload Form -->
-                        <form id="uploadForm{{ loop.index }}" enctype="multipart/form-data">
+                        <form id="uploadForm{{ category|replace(' ', '_') }}_{{ loop.index0 }}" enctype="multipart/form-data">
                             <div class="mb-3">
-                                <label for="fileInput{{ loop.index }}" class="form-label">Select files (pictures/videos):</label>
-                                <input class="form-control" type="file" id="fileInput{{ loop.index }}" name="files" multiple accept="image/*, video/*">
+                                <label for="fileInput{{ category|replace(' ', '_') }}_{{ loop.index0 }}" class="form-label">Select files (pictures/videos):</label>
+                                <input class="form-control" type="file" id="fileInput{{ category|replace(' ', '_') }}_{{ loop.index0 }}" name="files" multiple accept="image/*, video/*">
                             </div>
                         </form>
                     </div>
                     <div class="modal-footer">
                         <!-- Upload Button -->
-                        <button type="button" class="btn btn-success d-flex align-items-center" id="uploadButton{{ loop.index }}" onclick="uploadFiles('{{ task }}', '{{ loop.index }}')">
+                        <button type="button" class="btn btn-success d-flex align-items-center" id="uploadButton{{ category|replace(' ', '_') }}_{{ loop.index0 }}" onclick="uploadFiles('{{ task }}', '{{ category|replace(' ', '_') }}_{{ loop.index0 }}', )">
                             <i class="bi bi-upload me-2"></i> 
                             <span>Upload</span>
                         </button>
                         <!-- Spinner -->
-                        <div class="spinner-border text-success ms-3 d-none" role="status" id="uploadSpinner{{ loop.index }}">
+                        <div class="spinner-border text-success ms-3 d-none" role="status" id="uploadSpinner{{ category|replace(' ', '_') }}_{{ loop.index0 }}">
                             <span class="visually-hidden">Uploading...</span>
                         </div>
                     </div>
@@ -62,7 +62,6 @@
         })
         .then(response => response.json())
         .then(data => {
-            alert(data.message); // Show a success message
             location.reload(); // Reload the page to reflect changes
         })
         .catch(error => {

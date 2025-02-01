@@ -1,11 +1,11 @@
-<div class="modal fade view-modal" id="viewModal{{ loop.index }}" tabindex="-1" aria-labelledby="viewModalLabel{{ loop.index }}" aria-hidden="true">
+<div class="modal fade view-modal" id="viewModal{{ category|replace(' ', '_') }}_{{ loop.index0 }}" tabindex="-1" aria-labelledby="viewModalLabel{{ category|replace(' ', '_') }}_{{ loop.index0 }}" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="viewModalLabel{{ loop.index }}">Proof for {{ task }}</h5>
+                <h5 class="modal-title" id="viewModalLabel{{ category|replace(' ', '_') }}_{{ loop.index0 }}">Proof for {{ task }}</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body" id="media-content-{{ loop.index }}">
+            <div class="modal-body" id="media-content-{{ category|replace(' ', '_') }}_{{ loop.index0 }}">
                 <div class="text-center">
                     <p>Loading media...</p>
                 </div>

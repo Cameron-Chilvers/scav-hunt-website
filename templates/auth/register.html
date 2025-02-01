@@ -5,22 +5,52 @@
 {% endblock %}
 
 {% block content %}
+<style>
+  .fixed-width-input {
+    width: 300px !important;
+}
+</style>
+
 
 <div class="d-flex justify-content-center align-items-center">
   <div class="text-center">
     <form method="post" class="mb-3">
-      <div class="mb-3">
-        <label for="username" class="form-label">Username</label>
-        <input type="text" name="username" id="username" class="form-control" required>
+      <div class="mb-3 mx-auto">
+        <label for="username" class="form-label">Username: <i>Keep private used for you to login</i></label>
+        <input type="text" name="username" id="username" class="form-control fixed-width-input mx-auto" required>
       </div>
-      <div class="mb-3">
+      <div class="mb-3 mx-auto">
+        <label for="nickname" class="form-label">Nickname: <i>Displayed on website</i></label>
+        <input type="text" name="nickname" id="nickname" class="form-control fixed-width-input mx-auto" required>
+      </div>
+      <div class="mb-3 mx-auto">
         <label for="password" class="form-label">Password</label>
-        <input type="password" name="password" id="password" class="form-control" required>
+        <input type="password" name="password" id="password" class="form-control fixed-width-input mx-auto" required>
       </div>
       <button type="submit" class="btn btn-primary">Register</button>
     </form>
 
     {% include "auth/flash_message.html" %}
+
+    <p class="mt-3">
+      <a href="{{ url_for('auth.login') }}">Login</a>
+    </p>
+
+    <hr/>
+    <h5>Rules about Registering</h5>
+
+    <u>Nickname</u><br>
+    Please use a nickname where people can identify you by, and don't inlucde the characters "\", "/", or "?"
+    <br><br>
+
+
+    <u>Team Participation</u><br>
+    You may participate as an individual or in a team of two. If you are participating as a team, please register under a single name to share your entries. The prize money will be split amongst those in the team. 
+    <br><br>
+
+    <u>Account Registration</u><br>
+    When signing up for the scavenger hunt, do not use your regular password for security reasons. 
+    <br>
 
   </div>
 </div>

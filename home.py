@@ -17,6 +17,7 @@ home_bp = Blueprint('home', __name__)
 def index():    
     db: GoogleConnector = home_bp.app.config["DATABASE"]
     username = session.get('user_id')
+    nickname_lookup = home_bp.app.config['NICKNAME_LOOKUP']
 
     # Getting totals for the user
     totals: pd.DataFrame = db.get_totals()
@@ -25,6 +26,9 @@ def index():
     rank = row.index.tolist()[0] + 1
 
     # Getting the ranks in which have been completed
+    # Converting to nick name
+    totals.loc[:, 'name'] = totals['name'].str.lower()
+    totals.loc[:, 'name'] = totals['name'].map(nickname_lookup)
     top_five = totals.iloc[:5].values.tolist()
 
     # Getting the person just above the current player and the point difference
@@ -32,11 +36,13 @@ def index():
     if rank != 1:
         player_above = totals[totals.index == rank - 2].values.tolist()[0]
 
+
+    activities = db.get_activities()
     # Getting the tasks remaining for the user
     # Splitting up for the differnet columns
     col_one = []
     col_two = []
-    for k, v in db.activities.items():        
+    for k, v in activities.items():        
         formatted_name = k.replace("_", " ")
 
         # Calculate the number of tasks with status '1' or '0'
@@ -61,6 +67,11 @@ def index():
     # Get the recently done tasks
     history = db.get_history()
     history['time'] = pd.to_datetime(history['time'])
+
+    # Converting to nick name
+    history.loc[:, 'name'] = history['name'].str.lower()
+    history.loc[:, 'name'] = history['name'].map(nickname_lookup)
+
     recent_five_tasks_done = history.sort_values(['time'], ascending=[False]).head(5).values.tolist()
 
     # Get the updates information
@@ -69,6 +80,10 @@ def index():
     # Getting the recenct 5 updates
     filtered_udpates_df: pd.DataFrame = updates_data[(updates_data['user'] == username) & (updates_data['status'] != '')]
     filtered_udpates_df.loc[:, 'time'] = pd.to_datetime(filtered_udpates_df['time'])
+
+    # Converting to nickname
+    filtered_udpates_df.loc[:, 'user'] = filtered_udpates_df['user'].str.lower()
+    filtered_udpates_df.loc[:, 'user'] = filtered_udpates_df['user'].map(nickname_lookup)
     filtered_udpates_list = filtered_udpates_df.sort_values(['time'], ascending=[False]).head(5).values.tolist()
     
     return render_template('home/index.html', points = points, rank = rank, top_five = top_five, player_above = player_above,
@@ -114,7 +129,7 @@ def rules():
 
     read_rules = session.get('read_rules')
     username = session.get('user_id')
-    
+
     if request.method == 'POST': 
         # Set the read rules to be '1' in the database
         db.set_read_rules(username, '1')
@@ -149,10 +164,13 @@ def load_images():
     all_data = []
     urls = []
 
+    # Getting straight from db
+    activities = db.get_activities()
+
     # Getting the dataframes
-    all_data.append(db.activities['1_point'])
-    all_data.append(db.activities['3_point'])
-    all_data.append(db.activities['5_point'])
+    all_data.append(activities['1_point'])
+    all_data.append(activities['3_point'])
+    all_data.append(activities['5_point'])
     
     for df in all_data:
         filtered_df = df.loc[(df == '1').any(axis=1)]
@@ -165,6 +183,10 @@ def load_images():
             
             # Filtering by the name
             only_approved = filtered_df.loc[filtered_df[col] == '1']
+
+            # Skipping if there is no data to grab, so dont spam the api
+            if only_approved.empty:
+                continue
 
             # Getting specific folder
             username = col.replace(' ', '-')

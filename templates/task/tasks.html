@@ -59,7 +59,7 @@
                                 <td>
                                     {% if status == '' %}
                                         <!-- Upload Button -->
-                                        <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#uploadModal{{ loop.index }}"
+                                        <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#uploadModal{{ category|replace(' ', '_') }}_{{ loop.index0 }}"
                                         {% if not allow_tasks %}disabled{% endif %}>
                                             <i class="bi bi-upload"></i>
                                         </button>
@@ -67,7 +67,7 @@
                                         <!-- View Button -->
                                         <button type="button" class="btn btn-outline-warning btn-sm"
                                             data-bs-toggle="modal" 
-                                            data-bs-target="#viewModal{{ loop.index }}"
+                                            data-bs-target="#viewModal{{ category|replace(' ', '_') }}_{{ loop.index0 }}"
                                             data-media_info="{{ task_media }}">
                                             <i class="bi bi-eye"></i>
                                         </button>
@@ -75,7 +75,7 @@
                                         <!-- View Button -->
                                         <button type="button" class="btn btn-outline-success btn-sm"
                                             data-bs-toggle="modal" 
-                                            data-bs-target="#viewModal{{ loop.index }}"
+                                            data-bs-target="#viewModal{{ category|replace(' ', '_') }}_{{ loop.index0 }}"
                                             data-media_info="{{ task_media }}">
                                             <i class="bi bi-eye"></i>
                                         </button>
@@ -129,7 +129,7 @@
                                 <td>
                                     {% if status == '' %}
                                         <!-- Upload Button -->
-                                        <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#uploadModal{{ loop.index }}"
+                                        <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#uploadModal{{ category|replace(' ', '_') }}_{{ loop.index0 }}"
                                         {% if not allow_tasks %}disabled{% endif %}>
                                             <i class="bi bi-upload"></i>
                                         </button>
@@ -137,7 +137,7 @@
                                         <!-- View Button -->
                                         <button type="button" class="btn btn-outline-warning btn-sm"
                                             data-bs-toggle="modal" 
-                                            data-bs-target="#viewModal{{ loop.index }}"
+                                            data-bs-target="#viewModal{{ category|replace(' ', '_') }}_{{ loop.index0 }}"
                                             data-media_info="{{ task_media }}">
                                             <i class="bi bi-eye"></i>
                                         </button>
@@ -145,7 +145,7 @@
                                         <!-- View Button -->
                                         <button type="button" class="btn btn-outline-success btn-sm"
                                             data-bs-toggle="modal" 
-                                            data-bs-target="#viewModal{{ loop.index }}"
+                                            data-bs-target="#viewModal{{ category|replace(' ', '_') }}_{{ loop.index0 }}"
                                             data-media_info="{{ task_media }}">
                                             <i class="bi bi-eye"></i>
                                         </button>
@@ -271,6 +271,8 @@
             const id = object.id;
             const index = id.replace("hideBtn_", '');
             const table_body_id = "table_body_".concat(index);
+
+            const tableBody = document.getElementById(table_body_id);
 
             if (!object.hasAttribute('data-hidden')) {
                 object.setAttribute('data-hidden', 'true');

@@ -34,10 +34,12 @@ def tasks():
     points = row['points'].values[0]
     rank = row.index.tolist()[0] + 1
 
+    activities = db.get_activities()
+
     # Taken from the home.py
     col_one = []
     col_two = []
-    for k, v in db.activities.items():
+    for k, v in activities.items():
         # Gets the remaining tasks
         tasks_base = list(zip(v['Activities'], v[username]))
         tasks_list = [[activity, status] for activity, status in tasks_base]
@@ -203,33 +205,45 @@ def upload_files():
 @login_required
 def completed():
     db: GoogleConnector = tsk_bp.app.config["DATABASE"]
+    nickname_lookup = tsk_bp.app.config['NICKNAME_LOOKUP']
 
     totals: pd.DataFrame = db.get_totals()
     # Getting rankings
+    totals.loc[:, 'name'] = totals['name'].str.lower()
+    totals.loc[:, 'name'] = totals['name'].map(nickname_lookup)
+    totals['name'] = totals['name'].astype(str)
     rankings = totals.values.tolist()
-    players = sorted(rankings,key=lambda x: (x[0]))
+    print(rankings)
+    players = sorted(rankings, key=lambda x: (x[0]))
 
     # Getting the history of all compelted tasks
     history = db.get_history()
     history['time'] = pd.to_datetime(history['time'])
+    # Converting to nick name
+    history.loc[:, 'name'] = history['name'].str.lower()
+    history.loc[:, 'name'] = history['name'].map(nickname_lookup)
     history_list = history.sort_values(['time'], ascending=[False]).head(50).values.tolist() # only show latest 50 compelted task to stop cheating
-
-    print(history_list)
 
     return render_template('task/completed_tasks.html', completed_data = history_list, players = players)
 
 
-@tsk_bp.route('/completed_tasks/<username>')
+@tsk_bp.route('/completed_tasks/<nickname>')
 @login_required
-def completed_person(username):
+def completed_person(nickname):
     db: GoogleConnector = tsk_bp.app.config["DATABASE"]
-    
-    # Reverting username
+    nickname_lookup = tsk_bp.app.config['NICKNAME_LOOKUP']
+
+    nickname = nickname.replace('-', ' ')
+    username = next((key for key, val in nickname_lookup.items() if val == nickname), None)
+
+    # Reverting username      
     username = username.replace('-', ' ')
+
+    # Use the nickname
+    user_info = db.get_user_info(username)
 
     # Getting all the uploded media from the player
     all_media = db.get_all_media_from_user(username.replace(" ", '-'))
-    print(all_media)
 
     # Getting totals for the user
     totals: pd.DataFrame = db.get_totals()
@@ -237,10 +251,12 @@ def completed_person(username):
     points = row['points'].values[0]
     rank = row.index.tolist()[0] + 1
 
+    activities = db.get_activities()
+
     # Taken from the home.py
     col_one = []
     col_two = []
-    for k, v in db.activities.items():
+    for k, v in activities.items():
         # Gets the remaining tasks
         tasks_base = list(zip(v['Activities'], v[username]))
         tasks_list = [[activity, status] for activity, status in tasks_base]
@@ -285,4 +301,4 @@ def completed_person(username):
     col_one_sorted = sorted(col_one, key=lambda x: x[0])
     col_two_sorted = sorted(col_two, key=lambda x: int(x[0].split(" ")[0]))
 
-    return render_template('task/tasks_completed.html', rank = rank, points = points, col_one = col_one_sorted, col_two = col_two_sorted, user = username)
+    return render_template('task/tasks_completed.html', rank = rank, points = points, col_one = col_one_sorted, col_two = col_two_sorted, user = user_info['nickname'])

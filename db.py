@@ -2,18 +2,11 @@ from flask import Request
 import gspread
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
-from googleapiclient import _auth
-from googleapiclient.errors import HttpError
-from google_auth_oauthlib.flow import InstalledAppFlow
 from google.cloud import storage
 from datetime import timedelta
-
+import pytz
 import pandas as pd
-import os
-import glob
 import time
-import threading
 from datetime import datetime
 
 # Simple in-memory cache with expiration (global dictionary)
@@ -37,27 +30,26 @@ class GoogleConnector:
     def __init__(self, scopes = ["https://www.googleapis.com/auth/spreadsheets", 
                                  'https://www.googleapis.com/auth/drive',
                                 'https://www.googleapis.com/auth/devstorage.full_control'], 
-                 credential_path = r"credentials.json", 
-                 sheet_id = "1Ue-ugS6uAHgjY6rOvcbGNK92AKasbJiLINxpWmoKtvE", 
-                 folder_id='1wClLnyxbprifajhcqJenXD1zdAC79IMk'):
+                 credential_json = None, 
+                 sheet_id = "1Ue-ugS6uAHgjY6rOvcbGNK92AKasbJiLINxpWmoKtvE"):
 
         # Connection to Google sheets
         self.__scopes = scopes
-        self.__credential_path = credential_path
+        self.__credential_json = credential_json
         self.__sheet_id = sheet_id
-        self.__folder_id = folder_id
 
         # Connecting to the google client
-        creds = Credentials.from_service_account_file(self.__credential_path, scopes=self.__scopes, subject = 'jpscavdb@jpscavdb.iam.gserviceaccount.com')
+        creds = Credentials.from_service_account_info(self.__credential_json, scopes=self.__scopes, subject = 'jpscavdb@jpscavdb.iam.gserviceaccount.com')
+        
+        # Connection to gspread client
         self.sheet_client = gspread.authorize(creds)
+
+        # Connection to google client
+        self.__google_sheet_service = build("sheets", "v4", credentials=creds)
 
         # Getting sheet id and opening it
         self.__sheet_id = sheet_id
         self.__sheet = self.sheet_client.open_by_key(self.__sheet_id)
-
-        # Connection to drive client
-        self.http = _auth.authorized_http(creds)
-        self.__drive_service = build('drive', 'v3', http=self.http)
 
         # Storage Client
         self.__bucket_client = storage.Client(credentials=creds, project="jpscavdb")
@@ -66,11 +58,6 @@ class GoogleConnector:
 
         # Used for filtering
         self.__activity_worksheets = ["1_point", "3_point", "5_point", "7_point", "10_point"]
-
-        # Initialise compelted activite store
-        # 0 is pending
-        # 1 is approved
-        self.activities: dict[str, pd.DataFrame] = self.__get_activities()
     
     # Creating custom errors for adding and checking
     class UserAlreadyExistsError(Exception):
@@ -91,11 +78,11 @@ class GoogleConnector:
 # GOOGLE SHEET STUFF BELOW
 
 #######################################################################################################################################
-
-
     def __get_time_now(self):
+        # Get current time in AEST
+        now = datetime.now(pytz.FixedOffset(600))
+        
         # Format the date and time
-        now = datetime.now()
         formatted_time = now.strftime("%m/%d/%Y %H:%M:%S")
         return formatted_time
 
@@ -133,30 +120,28 @@ class GoogleConnector:
 
         return totals_df
     
-    # Getting all the point tables
-    def __get_activities(self):
-        # Initializing dict
-        all_data = dict()
+    # Getting all the point tables    
+    def get_activities(self):
+        # Prepare the batch request to fetch all data from the specified sheets
+        ranges = [f"{sheet_name}!A:Z" for sheet_name in self.__activity_worksheets]  # Adjust the range as needed
+        batch_request = self.__google_sheet_service.spreadsheets().values().batchGet(
+            spreadsheetId=self.__sheet_id,
+            ranges=ranges
+        )
+        response = batch_request.execute()
 
-        # Looping all worksheets and getting its info
-        for worksheet in self.__sheet.worksheets():
-            title = worksheet.title
+        # Process the response and convert each sheet's data into a DataFrame
+        all_data = {}
+        for sheet_name, value_range in zip(self.__activity_worksheets, response.get("valueRanges", [])):
+            data = value_range.get("values", [])
+            if data:  # Check if the sheet is not empty
+                header_length = len(data[0])  
+                padded_data = [row + [""] * (header_length - len(row)) for row in data]  # Pad rows with empty strings
 
-            # Only getting activity worksheets
-            if title not in self.__activity_worksheets:
-                continue
-            
-            # Getting data
-            worksheet_data, worksheet_col = self.__get_worksheet_data(title)
-            
-            # Converting df
-            worksheet_df = pd.DataFrame(worksheet_data, columns=worksheet_col)
+                all_data[sheet_name] = pd.DataFrame(padded_data [1:], columns=padded_data [0])  # First row as columns
 
-            # Adding to dict
-            all_data[title] = worksheet_df
-        
         return all_data
-    
+
     # Find value in column
     def __find_value_in_column(self, col_values, target_value):
         # Iterate through the values to find the target
@@ -191,12 +176,12 @@ class GoogleConnector:
             raise self.UserAlreadyExistsError
 
     # Adding user to the info 
-    def add_user(self, username, password):
+    def add_user(self, username, password, nickname):
         worksheet = self.__sheet.worksheet("user_info")
 
         # Adding to the sheet
         try:
-            worksheet.append_row([username, password, self.__get_time_now(), '0'])
+            worksheet.append_row([username, password, self.__get_time_now(), '0', nickname])
         except Exception as e:
             # Throw exception if there is an error adding the user
             raise self.UserAdditionError(f"Failed to add user '{username}': {str(e)}")
@@ -214,7 +199,7 @@ class GoogleConnector:
             raise self.UserAdditionError(f"Failed to add recent tasks: {task} for user '{name}': {str(e)}")
     
     # Get user for login
-    def get_user_by_username(self, username):
+    def get_user_info(self, username):
         # Getting column
         worksheet = self.__sheet.worksheet("user_info")
         column_values = worksheet.col_values(1)
@@ -226,9 +211,28 @@ class GoogleConnector:
         if cell is None:
             return None
         
-        user_info = worksheet.get(f"A{cell[0]}:B{cell[0]}")
+        user_info = worksheet.get(f"A{cell[0]}:E{cell[0]}")
        
-        return {'user': user_info[0][0], 'password': user_info[0][1]}
+        return {'user': user_info[0][0], 'password': user_info[0][1], 'time_created': user_info[0][2], 'read_rules': user_info[0][3], 'nickname': user_info[0][4]}
+
+    # Get user for login
+    def get_nicknames(self):
+        # Getting column
+        user_data, cols = self.__get_worksheet_data("user_info")
+
+        # Convert to Dataframe
+        user_df = pd.DataFrame(user_data, columns=cols)
+
+        # Only getting needed columns
+        user_dicts_list = user_df[['username', 'nickname']].to_dict('records')
+
+        # Creating the lookup dict
+        cache_dict = dict()
+        for user in user_dicts_list:
+            cache_dict[user['username']] = user['nickname']
+
+        return cache_dict
+
 
     # Changed password logic
     def change_password(self, username, new_password):
@@ -258,7 +262,6 @@ class GoogleConnector:
             title = worksheet.title
             if title == 'Totals':
                 worksheet.append_row([username, 0]) # adding to the totals table
-                self.totals.append({'name': username, 'points': 0})
                 continue
             elif "_point" not in title: # removes other pages not needed
                 continue
@@ -272,9 +275,6 @@ class GoogleConnector:
             # Updating the last index
             worksheet.update_cell(1, first_empty_index, username)
 
-            # Append into the dataframe as well
-            self.activities[title][username] = ""
-
     # Updating totals
     def update_totals(self):
         # go through each person in each dataframe and save to another dict
@@ -282,8 +282,10 @@ class GoogleConnector:
 
         old_totals = self.get_totals()
 
+        activities = self.get_activities()
+
         # Looping through all of the task dataframes
-        for k, df in self.activities.items():
+        for k, df in activities.items():
             point_value = int(k.split('_')[0])
 
             # Loop though each of the columns
@@ -444,6 +446,8 @@ class GoogleConnector:
         # Creating the subdirectory in cloud storage (if needed)
         self.create_user_folder(person_name_safe)
 
+        activities = self.get_activities()
+        
         for original_file, compressed_file, filename, content_type in files:
             # Reset file read from compression
             original_file.seek(0)  
@@ -461,12 +465,9 @@ class GoogleConnector:
             print(f"Uploaded compressed {filename} to {blob_path_compressed}")
 
         # Update the database for the given task
-        for key, value in self.activities.items():
+        for key, value in activities.items():
             if task not in value['Activities'].values.tolist():
                 continue
-            
-            # Update DataFrame
-            value.loc[value['Activities'] == task, user_id] = '0'
 
             # Call the database update method
             self.change_task(key, task, '0', user_id)
@@ -481,7 +482,7 @@ class GoogleConnector:
 
         # If no files found, return an empty DataFrame
         if not blobs:
-            return pd.DataFrame(columns=['id', 'mimeType', 'filename', 'name', 'Task', 'signed_url'])
+            return pd.DataFrame(columns=['id', 'mimeType', 'filename', 'name', 'Task', 'signed_url', 'uploaded_time'])
 
         # Extract metadata
         media_list = pd.DataFrame(
@@ -492,12 +493,17 @@ class GoogleConnector:
                     blob.name.split('/')[-1],  # Filename
                     user_folder_name,  # User folder name
                     blob.name.split('/')[-1].split('_')[0].replace('-', ' '),  # Task name (parsed from filename)
-                    self.generate_or_get_cached_signed_url(self.__bucket.name, blob.name)  # Get signed URL
+                    self.generate_or_get_cached_signed_url(self.__bucket.name, blob.name),  # Get signed URL
+                    blob.updated  # Upload/last modified time
                 )
                 for blob in blobs if not blob.name.endswith('/')  # Exclude "directory" placeholders
             ],
-            columns=['id', 'mimeType', 'filename', 'name', 'Task', 'signed_url']  # Added 'signed_url' column
+            columns=['id', 'mimeType', 'filename', 'name', 'Task', 'signed_url', 'uploaded_time']
         )
+
+        # Convert 'uploaded_time' column back to datetime for sorting, then sort
+        media_list = media_list.sort_values(by='uploaded_time', ascending=True).reset_index(drop=True)
+        media_list['uploaded_time'] = media_list['uploaded_time'].dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
 
         return media_list
     

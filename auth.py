@@ -14,6 +14,9 @@ def register():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
+        nickname = request.form['nickname']
+        nickname_lookup = auth_bp.app.config['NICKNAME_LOOKUP']
+
         db: GoogleConnector = auth_bp.app.config["DATABASE"]
         error = None
 
@@ -21,30 +24,38 @@ def register():
             error = 'Username is required.'
         elif not password:
             error = 'Password is required.'
+        elif username == nickname:
+            error = 'Username and nickname must be different'
 
-        if any(substring in username for substring in ['\\', '/', '?']):
-            error = r'You cannot include the characters \\, \ or ? in the username'
+        if any(substring in username for substring in ['\\', '/', '?']) or any(substring in nickname for substring in ['\\', '/', '?']):
+            error = r'You cannot include the characters \\, \ or ? in the username or nickname'
 
         if error is None:
             try:
                 # Standardising the username and password
                 username_standard = username.lower()
+                nickname_standard = nickname.lower()
                 hashed_password = generate_password_hash(password)
 
                 # Checking if it exists in db
                 db.check_user(username_standard)
 
                 # Adding the user
-                db.add_user(username_standard, hashed_password)
+                db.add_user(username_standard, hashed_password, nickname_standard)
 
                 # Add to the activity tables
                 db.add_to_activity_tables(username_standard)
+
+                # Add to nickname lookup
+                if nickname_standard not in nickname_lookup:
+                    auth_bp.app.config['NICKNAME_LOOKUP'][username] = nickname_standard
                 
             except db.UserAlreadyExistsError:
                 error = f'User "{username}" is already registered.'
             except db.UserAdditionError:
                 error = f"Unexpected error has occured when adding user: {username}"
-            except Exception:
+            except Exception as e:
+                print(e)
                 error = f"If you got here then idk what u did"
             else:
                 return redirect(url_for("auth.login"))
@@ -57,13 +68,13 @@ def register():
 @auth_bp.route('/login', methods=('GET', 'POST'))
 def login():
     if request.method == 'POST':
-        username = request.form['username']
+        username = request.form['username'].lower() # only using the lowercase one
         password = request.form['password']
         db: GoogleConnector = auth_bp.app.config["DATABASE"]
         error = None
 
         # GET USER and password FROM DATABASE
-        user = db.get_user_by_username(username)
+        user = db.get_user_info(username)
 
         # include error checking
         if user is None:
@@ -78,9 +89,11 @@ def login():
             session.permanent = True
 
             # Set the read rules flag
-            session['read_rules'] = db.get_read_rules(user['user'])
+            session['read_rules'] = user['read_rules']
             
-            print(session['read_rules'])
+            # Get nickname
+            session['nickname'] = user['nickname']
+
             return redirect(url_for('index'))
 
         flash(error)
@@ -106,7 +119,8 @@ def change_password():
             error = f'The user "{username}" does not exist'
         except db.UserAdditionError:
             error = f'Password change failed for user "{username}". Try again.'
-        except Exception:
+        except Exception as e:
+            print(e)
             error = "If you got here then idk what u did"
 
         # If no error return changed password correctly

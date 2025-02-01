@@ -53,7 +53,7 @@
                                         <!-- View Button -->
                                         <button type="button" class="btn btn-outline-warning btn-sm"
                                             data-bs-toggle="modal" 
-                                            data-bs-target="#viewModal{{ loop.index }}"
+                                            data-bs-target="#viewModal{{ category|replace(' ', '_') }}_{{ loop.index0 }}"
                                             data-media_info="{{ task_media }}">
                                             <i class="bi bi-eye"></i>
                                         </button>
@@ -61,7 +61,7 @@
                                         <!-- View Button -->
                                         <button type="button" class="btn btn-outline-success btn-sm"
                                             data-bs-toggle="modal" 
-                                            data-bs-target="#viewModal{{ loop.index }}"
+                                            data-bs-target="#viewModal{{ category|replace(' ', '_') }}_{{ loop.index0 }}"
                                             data-media_info="{{ task_media }}">
                                             <i class="bi bi-eye"></i>
                                         </button>
@@ -116,7 +116,7 @@
                                         <!-- View Button -->
                                         <button type="button" class="btn btn-outline-warning btn-sm"
                                             data-bs-toggle="modal" 
-                                            data-bs-target="#viewModal{{ loop.index }}"
+                                            data-bs-target="#viewModal{{ category|replace(' ', '_') }}_{{ loop.index0 }}"
                                             data-media_info="{{ task_media }}">
                                             <i class="bi bi-eye"></i>
                                         </button>
@@ -124,7 +124,7 @@
                                         <!-- View Button -->
                                         <button type="button" class="btn btn-outline-success btn-sm"
                                             data-bs-toggle="modal" 
-                                            data-bs-target="#viewModal{{ loop.index }}"
+                                            data-bs-target="#viewModal{{ category|replace(' ', '_') }}_{{ loop.index0 }}"
                                             data-media_info="{{ task_media }}">
                                             <i class="bi bi-eye"></i>
                                         </button>
