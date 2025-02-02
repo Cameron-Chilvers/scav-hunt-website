@@ -11,7 +11,7 @@ from home import home_bp
 from tasks import tsk_bp
 from approve import approve_bp
 
-dev = True
+dev = False
 
 def create_app():
     # create and configure the app
@@ -19,7 +19,10 @@ def create_app():
     
     # Adding 30 mins timeout
     app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
-   
+    app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  
+    app.config['DEV_MODE'] = dev
+    app.config['UPLOAD_FOLDER'] = 'uploads'
+
     # Getting locally if dev
     if not dev:
         # Set secret key

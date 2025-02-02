@@ -5,7 +5,7 @@ from auth import login_required
 import os
 import pandas as pd
 from PIL import Image
-from moviepy import VideoFileClip
+import subprocess
 import tempfile
 import json
 
@@ -95,110 +95,185 @@ def tasks():
     timenow = datetime.now(tz)
 
     # Check if the current time is within the range
-    allow_tasks = (time_start <= timenow and timenow <= time_end)
-    allow_tasks = True
-    
+    if not tsk_bp.app.config['DEV_MODE']:
+        allow_tasks = (time_start <= timenow and timenow <= time_end)
+    else:
+        allow_tasks == True
+        
     return render_template('task/tasks.html', rank = rank, points = points, col_one = col_one_sorted, col_two = col_two_sorted, allow_tasks = allow_tasks)
 
-def compress_file(file, task_safe, quality=40, video_bitrate="200k"):
+def compress_file(file, task_safe, file_path, quality=40, video_bitrate="200k"):
     """
     Compress an image or video file and return a file-like object.
 
     Args:
-        file (FileStorage): File object to process.
+        file (_io.BufferedReader or str): Opened file object or file path.
         task_safe (str): Safe task identifier to prepend to filename.
+        file_path (str): Original file path (used for filename extraction).
         quality (int): Compression quality for images (1-100, higher is better quality).
         video_bitrate (str): Bitrate for video compression (e.g., "800k").
 
     Returns:
         tuple: (file-like object, new filename, content_type)
     """
-    filename = f"{task_safe}_{secure_filename(file.filename)}"
+
+    # Generate safe filename
+    filename = f"{task_safe}_{secure_filename(os.path.basename(file_path))}"
     _, ext = os.path.splitext(filename)
     ext = ext.lower()
+    
+    # Create a temporary file to store file content
+    with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as temp_input:
+        temp_input.write(file.read())  # Read from BufferedReader
+        temp_input.flush()  # Ensure all data is written
+        input_path = temp_input.name  # Use the temp file path
 
     if ext in [".jpg", ".jpeg", ".png", ".webp"]:
+
         try:
-            img = Image.open(file)
-            img = img.convert("RGB")
+        # Process images
+            img = Image.open(input_path)
+            img = img.convert("RGB")  # Ensure compatibility
+            
             buffer = io.BytesIO()
             img.save(buffer, format="JPEG", optimize=True, quality=quality)
             buffer.seek(0)
+
             return buffer, filename, "image/jpeg"
         except Exception as e:
-            print(f"Error compressing image {filename}: {e}")
+            print(f"Error processing file {filename}: {e}")
             return None
-
+        
+        finally:
+            # Clean up temporary files
+            if os.path.exists(input_path):
+                os.remove(input_path)  # Clean up input temp file
+        
     elif ext in [".mp4", ".mov", ".avi", ".mkv"]:
-       # Use BytesIO to store the video file in memory
-        file.seek(0)  # Ensure we read from the start of the file
-        buffer = io.BytesIO(file.read())
-        buffer.seek(0)  # Reset the buffer's position to the start
-
-        # Write to a temporary file so MoviePy can process it
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_file:
-            temp_file.write(buffer.read())  # Write the video data to the temp file
-            temp_file_path = temp_file.name  # Get the path to the temporary file
-
         try:
-            # Use VideoFileClip with the path to the temp file
-            with VideoFileClip(temp_file_path) as video:
-                # Write the output to a temporary file
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_output_file:
-                    temp_output_path = temp_output_file.name
-                    video.write_videofile(temp_output_path, bitrate=video_bitrate, audio_codec="aac", threads=4)
-                
-                # Read the output video file into a buffer
+            # Process videos
+                temp_output = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+                temp_output_path = temp_output.name
+                temp_output.close()  # Close so FFmpeg can write to it
+
+                # Optimize FFmpeg command for low memory usage
+                command = [
+                    "ffmpeg", "-y",
+                    "-i", input_path,
+                    "-b:v", video_bitrate,
+                    "-preset", "veryfast",
+                    "-bufsize", "500k",
+                    "-maxrate", video_bitrate,
+                    "-c:a", "aac", "-b:a", "128k",
+                    "-threads", "1",
+                    "-movflags", "+faststart",
+                    temp_output_path
+                ]
+                subprocess.run(command, check=True)
+
+                # Read compressed video into memory
                 with open(temp_output_path, "rb") as f:
                     output_buffer = io.BytesIO(f.read())
                 output_buffer.seek(0)
+
+                return output_buffer, filename, "video/mp4"
+
         except Exception as e:
-            print(f"Error processing video {filename}: {e}")
-            os.remove(temp_file_path)
+            print(f"Error processing file {filename}: {e}")
             return None
 
-        # Clean up the temporary file after processing
-        os.remove(temp_file_path)
+        finally:
+            # Clean up temporary output file
+            if os.path.exists(input_path):
+                os.remove(input_path)  # Clean up input temp file
 
-        return output_buffer, filename, "video/mp4"
-    
+            if os.path.exists(temp_output_path):
+                os.remove(temp_output_path)
+
+
     print(f"Unsupported file type for {filename}. Skipping.")
     return None
-
+    
 @tsk_bp.route('/upload_files', methods=['POST'])
 @login_required
 def upload_files():
     db: GoogleConnector = tsk_bp.app.config["DATABASE"]
 
-    # Get the task and personName from the form data
-    task = request.form.get('task')
-    person_name = request.form.get('name')
+    print("Current working directory:", os.getcwd())
+    print("Files in upload directory:", os.listdir("uploads/temp"))
 
-    # Replace spaces with '-' in task and personName
+    # Get task and person name
+    task = request.form.get('task', '').strip()
+    person_name = request.form.get('name', '').strip()
+
+    if not task or not person_name:
+        return jsonify({"error": "Task or Name is missing"}), 400
+
+    # Normalize names for safe filenames
     task_safe = task.replace(' ', '-')
     person_name_safe = person_name.replace(' ', '-')
 
-    # Getting files
-    files = request.files.getlist('files')
-
-    # Getting user id
+    # Get user ID
     user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
 
-    # Process and upload each file
-    processed_files = []
-    for file in files:
-        compressed_file, filename, content_type = compress_file(file, task_safe)
+    # Get chunk information
+    chunk_index = int(request.form.get('chunkIndex', 0))
+    total_chunks = int(request.form.get('totalChunks', 1))
+    file_name = secure_filename(request.form.get('fileName', ''))
 
-        if compressed_file:
-            processed_files.append((file, compressed_file, filename, content_type))
+    if not file_name:
+        return jsonify({"error": "File name is missing"}), 400
 
-    # Upload compressed files directly from memory
-    db.upload_files(person_name_safe, processed_files, task, user_id)
+    temp_dir = os.path.join(os.getcwd(), tsk_bp.app.config['UPLOAD_FOLDER'], 'temp', os.path.splitext(file_name)[0])
+    os.makedirs(temp_dir, exist_ok=True)  # Ensure the directory exists
 
-    # Task status update
-    db.add_to_task_status(user=person_name, task=task, status="", message='')
+    # Save the chunk
+    chunk_file_path = os.path.join(temp_dir, f"{chunk_index}.part")
+    print(f"Saving chunk at: {chunk_file_path}")  # Debugging log
 
-    return jsonify({"message": "Files uploaded successfully!"})
+    with open(chunk_file_path, 'wb') as f:
+        f.write(request.files['file'].read())
+
+    # Check if all chunks have been uploaded
+    if chunk_index == total_chunks - 1:
+        final_file_path = os.path.join(os.getcwd(), tsk_bp.app.config['UPLOAD_FOLDER'], file_name)
+        with open(final_file_path, 'wb') as final_file:
+            for i in range(total_chunks):
+                chunk_path = os.path.join(temp_dir, f"{i}.part")
+                if not os.path.exists(chunk_path):
+                    print(f"ERROR: Missing chunk {chunk_path}")  # Debugging log
+                    return jsonify({"error": f"Missing chunk {i}"}), 500
+
+                with open(chunk_path, 'rb') as chunk_file:
+                    final_file.write(chunk_file.read())
+
+                os.remove(chunk_path)  # Delete the chunk after merging
+
+        os.rmdir(temp_dir)  # Remove the temporary directory after merging
+
+        print(f"File successfully reassembled: {final_file_path}")  # Debugging log
+
+        # Process the final file (e.g., compress and upload to database)
+        try:
+            with open(final_file_path, 'rb') as final_file:
+                compressed_file, filename, content_type = compress_file(final_file, task_safe, final_file_path)
+
+                if compressed_file:
+                    db.upload_files(person_name_safe, [(final_file, compressed_file, filename, content_type)], task, user_id)
+                    db.add_to_task_status(user=person_name, task=task, status="", message="")
+                    return jsonify({"message": "Files uploaded successfully!"})
+                else:
+                    return jsonify({"error": "Compression failed"}), 500
+
+        except Exception as e:
+            print(f"Upload failed: {e}")
+            return jsonify({"error": "Upload failed"}), 500
+        finally:
+            os.remove(final_file_path)  # Clean up the final file
+
+    return jsonify({"message": f"Chunk {chunk_index + 1} of {total_chunks} uploaded"})
 
 
 @tsk_bp.route('/completed_tasks')

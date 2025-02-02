@@ -35,43 +35,65 @@
 
 <!-- JavaScript to handle file uploads -->
 <script>
-    function uploadFiles(task, index) {
+    async function uploadFiles(task, index) {
         const uploadButton = document.getElementById(`uploadButton${index}`);
         const spinner = document.getElementById(`uploadSpinner${index}`);
-        const form = document.getElementById(`uploadForm${index}`);
         const fileInput = document.getElementById(`fileInput${index}`);
-        const formData = new FormData(form);
+        const files = fileInput.files;
 
-        // Check if the file input is empty
-        if (fileInput.files.length === 0) {
-                alert('Please select at least one file to upload.');
-                return;
-            }
-        // Add task and user ID to the form data
-        formData.append('task', task);
-        formData.append('name', '{{ session.get("user_id") }}');
+        if (files.length === 0) {
+            alert('Please select at least one file to upload.');
+            return;
+        }
 
         // Show spinner and disable upload button
         spinner.classList.remove('d-none');
         uploadButton.disabled = true;
 
-        // Send the files to the Flask endpoint
-        fetch('/upload_files', {
-            method: 'POST',
-            body: formData,
-        })
-        .then(response => response.json())
-        .then(data => {
-            location.reload(); // Reload the page to reflect changes
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Failed to upload files.');
-        })
-        .finally(() => {
-            // Hide spinner and re-enable upload button
-            spinner.classList.add('d-none');
-            uploadButton.disabled = false;
-        });
+        // Upload each file in chunks
+        for (const file of files) {
+            const chunkSize = 10 * 1024 * 1024; // 10MB
+            const totalChunks = Math.ceil(file.size / chunkSize);
+
+            for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+                const start = chunkIndex * chunkSize;
+                const end = Math.min(start + chunkSize, file.size);
+                const chunk = file.slice(start, end);
+
+                const formData = new FormData();
+                formData.append('file', chunk, file.name);
+                formData.append('task', task);
+                formData.append('name', '{{ session.get("user_id") }}');
+                formData.append('fileName', file.name);
+                formData.append('chunkIndex', chunkIndex);
+                formData.append('totalChunks', totalChunks);
+
+                try {
+                    const response = await fetch('/upload_files', {
+                        method: 'POST',
+                        body: formData,
+                    });
+
+                    const data = await response.json();
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+
+                    console.log(data.message);
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('Failed to upload files.');
+                    spinner.classList.add('d-none');
+                    uploadButton.disabled = false;
+                    return;
+                }
+            }
+        }
+
+        // Hide spinner and re-enable upload button
+        spinner.classList.add('d-none');
+        uploadButton.disabled = false;
+        alert('All files uploaded successfully!');
+        location.reload(); // Reload the page to reflect changes
     }
 </script>

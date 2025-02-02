@@ -7,6 +7,7 @@ ENV APP_HOME /back-end
 WORKDIR $APP_HOME
 COPY . ./
 
+RUN apt-get update && apt-get install -y ffmpeg
 RUN pip install --no-cache-dir --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -15,4 +16,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 # For environments with multiple CPU cores, increase the number of workers
 # to be equal to the cores available.
 # Timeout is set to 0 to disable the timeouts of the workers to allow Cloud Run to handle instance scaling.
-CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 app:app
+CMD exec gunicorn --bind :$PORT --workers 2 -k gthread --threads 8 --timeout 600 app:app

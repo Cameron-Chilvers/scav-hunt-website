@@ -397,6 +397,15 @@ class GoogleConnector:
         # Changing the task cell value        
         worksheet.update_cell(user_cell.row, 4, value)
 
+    def get_approvers(self):
+        # Getting the totals sheet
+        approve_data, cols = self.__get_worksheet_data("approvers")
+
+        # Convert to Dataframe
+        approve_df = pd.DataFrame(approve_data, columns=cols)
+
+        return approve_df
+    
 
 #######################################################################################################################################
 

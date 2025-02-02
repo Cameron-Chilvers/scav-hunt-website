@@ -26,7 +26,7 @@
             <a class="nav-item nav-link" href="{{ url_for('tasks.completed') }}">All Completed Tasks</a>
             <a class="nav-item nav-link" href="{{ url_for('home.gallery') }}">Photo Gallery</a>
             
-            {% if session.get('user_id') == 'cameron' or session.get('user_id') == 'ethanqhd' %}
+            {% if session.get('user_id') in session.get('approvers') %}
               <a class="nav-item nav-link" href="{{ url_for('approve.approve_tasks') }}">Approve</a>
             {% endif %}
 

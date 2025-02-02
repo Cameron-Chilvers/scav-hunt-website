@@ -19,6 +19,11 @@ def index():
     username = session.get('user_id')
     nickname_lookup = home_bp.app.config['NICKNAME_LOOKUP']
 
+    approvers_df = db.get_approvers()
+    print(approvers_df['name'].values.tolist())
+
+    session['approvers'] = approvers_df['name'].values.tolist()
+
     # Getting totals for the user
     totals: pd.DataFrame = db.get_totals()
     row: pd.DataFrame = totals[totals['name'] == username]
