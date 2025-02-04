@@ -102,7 +102,7 @@ def tasks():
         
     return render_template('task/tasks.html', rank = rank, points = points, col_one = col_one_sorted, col_two = col_two_sorted, allow_tasks = allow_tasks)
 
-def compress_file(file, task_safe, file_path, quality=40, video_bitrate="200k"):
+def compress_file(file, task_safe, file_path, quality=100, video_bitrate="600k", compress=False):
     """
     Compress an image or video file and return a file-like object.
 
@@ -112,6 +112,7 @@ def compress_file(file, task_safe, file_path, quality=40, video_bitrate="200k"):
         file_path (str): Original file path (used for filename extraction).
         quality (int): Compression quality for images (1-100, higher is better quality).
         video_bitrate (str): Bitrate for video compression (e.g., "800k").
+        compress (bool): Whether to compress the file or return it as is.
 
     Returns:
         tuple: (file-like object, new filename, content_type)
@@ -129,29 +130,27 @@ def compress_file(file, task_safe, file_path, quality=40, video_bitrate="200k"):
         input_path = temp_input.name  # Use the temp file path
 
     if ext in [".jpg", ".jpeg", ".png", ".webp"]:
-
         try:
-        # Process images
             img = Image.open(input_path)
             img = img.convert("RGB")  # Ensure compatibility
             
             buffer = io.BytesIO()
-            img.save(buffer, format="JPEG", optimize=True, quality=quality)
+            if compress:
+                img.save(buffer, format="JPEG", optimize=True, quality=quality)
+            else:
+                img.save(buffer, format="JPEG")
             buffer.seek(0)
-
             return buffer, filename, "image/jpeg"
         except Exception as e:
             print(f"Error processing file {filename}: {e}")
             return None
-        
         finally:
-            # Clean up temporary files
             if os.path.exists(input_path):
                 os.remove(input_path)  # Clean up input temp file
-        
+    
     elif ext in [".mp4", ".mov", ".avi", ".mkv"]:
         try:
-            # Process videos
+            if compress:
                 temp_output = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
                 temp_output_path = temp_output.name
                 temp_output.close()  # Close so FFmpeg can write to it
@@ -171,25 +170,24 @@ def compress_file(file, task_safe, file_path, quality=40, video_bitrate="200k"):
                 ]
                 subprocess.run(command, check=True)
 
-                # Read compressed video into memory
                 with open(temp_output_path, "rb") as f:
                     output_buffer = io.BytesIO(f.read())
                 output_buffer.seek(0)
+            else:
+                with open(input_path, "rb") as f:
+                    output_buffer = io.BytesIO(f.read())
+                output_buffer.seek(0)
 
-                return output_buffer, filename, "video/mp4"
+            return output_buffer, filename, "video/mp4"
 
         except Exception as e:
             print(f"Error processing file {filename}: {e}")
             return None
-
         finally:
-            # Clean up temporary output file
             if os.path.exists(input_path):
-                os.remove(input_path)  # Clean up input temp file
-
-            if os.path.exists(temp_output_path):
+                os.remove(input_path)
+            if compress and os.path.exists(temp_output_path):
                 os.remove(temp_output_path)
-
 
     print(f"Unsupported file type for {filename}. Skipping.")
     return None
@@ -205,6 +203,8 @@ def upload_files():
     # Get task and person name
     task = request.form.get('task', '').strip()
     person_name = request.form.get('name', '').strip()
+
+    task_status = db.get_task_status()
 
     if not task or not person_name:
         return jsonify({"error": "Task or Name is missing"}), 400
