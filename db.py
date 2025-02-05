@@ -438,14 +438,14 @@ class GoogleConnector:
             print(f"Error creating folder: {e}")
             raise
 
-        # Create a "compressed" subfolder
-        compressed_folder_blob = self.__bucket.blob(f"{folder_name}/compressed/")
-        try:
-            compressed_folder_blob.upload_from_string('')
-            print(f"Created subfolder: {folder_name}/compressed/")
-        except Exception as e:
-            print(f"Error creating subfolder: {e}")
-            raise                
+        # # Create a "compressed" subfolder
+        # compressed_folder_blob = self.__bucket.blob(f"{folder_name}/compressed/")
+        # try:
+        #     compressed_folder_blob.upload_from_string('')
+        #     print(f"Created subfolder: {folder_name}/compressed/")
+        # except Exception as e:
+        #     print(f"Error creating subfolder: {e}")
+        #     raise                
 
     # Upload files here
     def upload_files(self, person_name_safe, files, task, user_id):
@@ -467,11 +467,11 @@ class GoogleConnector:
             blob_original.upload_from_file(original_file, content_type=content_type)
             print(f"Uploaded original {filename} to {blob_path_original}")
 
-            # Upload compressed file
-            blob_path_compressed = f"{user_folder_path_compressed}{filename}"
-            blob_compressed = self.__bucket.blob(blob_path_compressed)
-            blob_compressed.upload_from_file(compressed_file, content_type=content_type)
-            print(f"Uploaded compressed {filename} to {blob_path_compressed}")
+            # # Upload compressed file
+            # blob_path_compressed = f"{user_folder_path_compressed}{filename}"
+            # blob_compressed = self.__bucket.blob(blob_path_compressed)
+            # blob_compressed.upload_from_file(compressed_file, content_type=content_type)
+            # print(f"Uploaded compressed {filename} to {blob_path_compressed}")
 
         # Update the database for the given task
         for key, value in activities.items():
@@ -484,7 +484,7 @@ class GoogleConnector:
     # Getting all the media the user has uploaded
     def get_all_media_from_user(self, user_folder_name):
         bucket = self.__bucket  # Assuming `self.__bucket` is a `google.cloud.storage.Bucket` instance
-        user_folder_path = f"{user_folder_name}/compressed/"  # Ensure folder path format
+        user_folder_path = f"{user_folder_name}/"  # Ensure folder path format
 
         # List all files in the user's folder
         blobs = list(bucket.list_blobs(prefix=user_folder_path))
