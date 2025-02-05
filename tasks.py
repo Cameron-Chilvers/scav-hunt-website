@@ -198,7 +198,7 @@ def upload_files():
     db: GoogleConnector = tsk_bp.app.config["DATABASE"]
 
     print("Current working directory:", os.getcwd())
-    print("Files in upload directory:", os.listdir("uploads/temp"))
+    # print("Files in upload directory:", os.listdir("uploads/temp"))
 
     # Get task and person name
     task = request.form.get('task', '').strip()
