@@ -94,6 +94,11 @@ def login():
             # Get nickname
             session['nickname'] = user['nickname']
 
+            approvers_df = db.get_approvers()
+            print(approvers_df['name'].values.tolist())
+
+            session['approvers'] = approvers_df['name'].values.tolist()
+
             return redirect(url_for('index'))
 
         flash(error)

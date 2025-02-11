@@ -19,11 +19,6 @@ def index():
     username = session.get('user_id')
     nickname_lookup = home_bp.app.config['NICKNAME_LOOKUP']
 
-    approvers_df = db.get_approvers()
-    print(approvers_df['name'].values.tolist())
-
-    session['approvers'] = approvers_df['name'].values.tolist()
-
     # Getting totals for the user
     totals: pd.DataFrame = db.get_totals()
     row: pd.DataFrame = totals[totals['name'] == username]
@@ -113,6 +108,7 @@ def updates():
     # Filitered df
     filtered_udpates_df: pd.DataFrame = updates_data[updates_data['user'] == username]
     filtered_udpates_df['time'] = pd.to_datetime(filtered_udpates_df['time'])
+    filtered_udpates_df = filtered_udpates_df.sort_values('status', ascending=True).drop_duplicates(subset=['task'], keep='last')
     filtered_udpates_list = filtered_udpates_df.sort_values(['time'], ascending=[False]).head(75).values.tolist() # Only show last 75 of your updates
 
     return render_template('home/updates.html', updates_data = filtered_udpates_list, points = points, rank = rank)

@@ -61,27 +61,37 @@ def approve_tasks():
         
             # Only getting the Tasks for the specific person
             media_tasks_filtered = grouped_all_media[grouped_all_media["Task"].isin(filtered_df["Activities"])]
-            
+
             # Getting the merged data
             combined_df = pd.merge(filtered_df, media_tasks_filtered, left_on="Activities", right_on="Task", how="left")
 
             # Only getting the correct Name
             combined_df = combined_df[combined_df['Name'] == task_collection['Name']]
 
+            print(combined_df)
+
             # Add a nickname column using the nickname_lookup dictionary
             combined_df.loc[:, 'Nickname'] = combined_df['Name'].map(nickname_lookup)
-
-           # Combining the columns into JSON data for the front end
+            combined_df['sort_time'] = combined_df['uploaded_time'].apply(lambda x: x[0] if isinstance(x, list) else x)
+            combined_df['sort_time'] = pd.to_datetime(combined_df['sort_time'].str.rstrip('Z1'), errors='coerce')
+            # Ensureing that uploasded correct type
+            print(type(combined_df))
+            print(combined_df)
+            # Combining the columns into JSON data for the front end
             final_combined_df = (
-                combined_df[["Activities", "Name", "Nickname", "uploaded_time"]]
-                .assign(media_info=combined_df.iloc[:, 2:-2].apply(lambda x: json.dumps(x.to_dict()), axis=1))
+                combined_df[["Activities", "Name", "Nickname", "uploaded_time", "sort_time"]]
+                .assign(media_info=combined_df.iloc[:, 2:-3].apply(lambda x: json.dumps(x.to_dict()), axis=1))
                 .to_dict(orient='records')
             )
+            print(type(final_combined_df))
+            print(final_combined_df)
 
+
+            # final_combined_df['uploaded_time'] = final_combined_df['uploaded_time']
             unapproved_tasks += final_combined_df
 
     # Sort efficiently using pre-extracted `uploaded_time`
-    unapproved_tasks.sort(key=lambda task: task.get("uploaded_time", pd.NaT))
+    unapproved_tasks.sort(key=lambda task: task.get("sort_time", 0))
 
     return render_template('home/approve.html', unapproved_tasks=unapproved_tasks)
 
@@ -152,7 +162,7 @@ def deny_task(task_name, user_name, deny_message):
 
             # Delete from bucket
             db.delete_from_storage(task_name=task_name, user_name=user_name, compressed=False)
-            db.delete_from_storage(task_name=task_name, user_name=user_name, compressed=True)
+            # db.delete_from_storage(task_name=task_name, user_name=user_name, compressed=True)
 
             # Add to the task messge db 
             db.edit_task_status(user=name_real, task=task_real, status="0", message=deny_message_real)
