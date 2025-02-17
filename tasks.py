@@ -89,7 +89,7 @@ def tasks():
 
     # Create datetime objects with proper timezone localization
     time_start = tz.localize(datetime(2025, 2, 3, 7))
-    time_end = tz.localize(datetime(2025, 2, 17, 20))
+    time_end = tz.localize(datetime(2025, 2, 17, 21))
 
     # Get the current time in the same timezone
     timenow = datetime.now(tz)
